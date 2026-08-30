@@ -26,6 +26,7 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import logo from "@/assets/logo.png";
 
 const navItems = [
   { icon: Home, label: "Home", href: "/creator" },
@@ -66,9 +67,7 @@ export default function CreatorSidebar() {
       <div className="p-6 border-b">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-              <Zap className="w-6 h-6 text-primary-foreground" />
-            </div>
+            <img src={logo} alt="Creatorsctrl" className="w-10 h-10 rounded-xl" />
             <div>
               <h1 className="font-bold text-lg">Creatorsctrl</h1>
               <p className="text-xs text-muted-foreground">Creator Portal</p>

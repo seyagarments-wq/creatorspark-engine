@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Zap, Loader2, Users, Shield } from "lucide-react";
+import logo from "@/assets/logo.png";
 import { z } from "zod";
 
 
@@ -314,9 +315,7 @@ export default function Landing() {
       <div className="w-full max-w-md relative z-10 animate-fade-in">
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-purple flex items-center justify-center shadow-glow-md">
-            <Zap className="w-7 h-7 text-white" />
-          </div>
+          <img src={logo} alt="Creatorsctrl" className="w-12 h-12 rounded-2xl shadow-glow-md" />
           <span className="font-semibold text-2xl text-foreground">Creatorsctrl</span>
         </div>
 
