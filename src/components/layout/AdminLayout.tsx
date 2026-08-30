@@ -128,9 +128,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         <div className="flex flex-col h-full rounded-[28px] bg-card border border-border/60 shadow-soft-lg overflow-hidden">
           {/* Logo + Title */}
           <div className="h-[68px] flex items-center gap-3 px-5">
-            <img src={logo} alt="Creatorsctrl" width={36} height={36} className="w-9 h-9 rounded-2xl" />
+            <img src={logo} alt="Creators Control" width={36} height={36} className="w-9 h-9 rounded-2xl" />
             <div className="flex flex-col leading-tight">
-              <span className="font-semibold text-sm tracking-tight">Creatorsctrl</span>
+              <span className="font-semibold text-sm tracking-tight">Creators Control</span>
               <span className="text-[11px] text-muted-foreground">Admin workspace</span>
             </div>
           </div>

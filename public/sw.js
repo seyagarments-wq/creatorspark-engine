@@ -22,7 +22,7 @@ self.addEventListener('push', function(event) {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Creatorsctrl', options)
+    self.registration.showNotification(data.title || 'Creators Control', options)
   );
 });
 

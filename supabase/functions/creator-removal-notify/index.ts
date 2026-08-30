@@ -72,11 +72,11 @@ serve(async (req) => {
           body: JSON.stringify({
             user_id: creator_user_id,
             title: `[Important] Your account has been removed from the platform`,
-            message: `Hello ${creator_name},\n\nYour account has been removed from Creatorsctrl. Reason: ${actualReason}.\n\nConsistent participation is required to remain active on the platform, and that standard was not met.\n\nIf you believe this was made in error or would like to discuss next steps, please reply to this email.`,
+            message: `Hello ${creator_name},\n\nYour account has been removed from Creators Control. Reason: ${actualReason}.\n\nConsistent participation is required to remain active on the platform, and that standard was not met.\n\nIf you believe this was made in error or would like to discuss next steps, please reply to this email.`,
             notification_type: "general",
             link: "/creator",
             button_text: "View account",
-            from_name: "Creatorsctrl",
+            from_name: "Creators Control",
           }),
         });
         logStep("Sent personal removal email", { creator_user_id });
@@ -91,7 +91,7 @@ serve(async (req) => {
             notification_type: "general",
             link: "/creator/submit",
             button_text: "Submit a video",
-            from_name: "Creatorsctrl",
+            from_name: "Creators Control",
           }),
         });
         logStep("Sent personal at-risk email", { creator_user_id });
@@ -192,7 +192,7 @@ serve(async (req) => {
             notification_type: "general",
             link: "/creator/submit",
             button_text: broadcastButton,
-            from_name: "Creatorsctrl",
+            from_name: "Creators Control",
           }),
         });
 

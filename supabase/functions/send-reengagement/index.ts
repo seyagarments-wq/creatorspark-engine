@@ -21,7 +21,7 @@ function getEmailHtml(body: string, name: string, buttonText: string, link: stri
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background-color:#f4f4f5;margin:0;padding:24px;">
 <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:16px;padding:36px 32px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
   <div style="text-align:center;margin-bottom:28px;">
-    <span style="display:inline-block;background:linear-gradient(135deg,#8B5CF6,#7C3AED);color:white;padding:10px 20px;border-radius:10px;font-weight:700;font-size:18px;">Creatorsctrl</span>
+    <span style="display:inline-block;background:linear-gradient(135deg,#8B5CF6,#7C3AED);color:white;padding:10px 20px;border-radius:10px;font-weight:700;font-size:18px;">Creators Control</span>
   </div>
   <p style="color:#1f2937;font-size:16px;margin:0 0 16px 0;font-weight:500;">Hey ${name},</p>
   ${paragraphs}
@@ -29,7 +29,7 @@ function getEmailHtml(body: string, name: string, buttonText: string, link: stri
     <a href="${link}" style="display:inline-block;background-color:#8B5CF6;color:white;padding:14px 28px;text-decoration:none;border-radius:8px;font-weight:600;font-size:16px;">${buttonText}</a>
   </div>
   <div style="margin-top:36px;padding-top:20px;border-top:1px solid #e5e7eb;text-align:center;">
-    <p style="color:#a1a1aa;font-size:12px;margin:0;">Creatorsctrl &bull; Manage preferences in your profile settings</p>
+    <p style="color:#a1a1aa;font-size:12px;margin:0;">Creators Control &bull; Manage preferences in your profile settings</p>
   </div>
 </div></body></html>`;
 }
@@ -134,7 +134,7 @@ serve(async (req) => {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${RESEND_API_KEY}` },
           body: JSON.stringify({
-            from: "Creatorsctrl <noreply@seyagarments.com>",
+            from: "Creators Control <noreply@seyagarments.com>",
             to: [profile.email],
             subject,
             html: getEmailHtml(body, profile.full_name, cta, link),

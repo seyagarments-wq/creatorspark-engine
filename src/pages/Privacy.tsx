@@ -10,8 +10,8 @@ export default function Privacy() {
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="container max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <img src={logo} alt="Creatorsctrl" className="w-8 h-8 rounded-lg" />
-            <span className="font-bold text-lg">Creatorsctrl</span>
+            <img src={logo} alt="Creators Control" className="w-8 h-8 rounded-lg" />
+            <span className="font-bold text-lg">Creators Control</span>
           </Link>
           <Button variant="ghost" size="sm" asChild>
             <Link to="/">
@@ -31,7 +31,7 @@ export default function Privacy() {
           <section>
             <h2 className="text-xl font-semibold mb-4">1. Introduction</h2>
             <p className="text-muted-foreground leading-relaxed">
-              Creatorsctrl ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our platform.
+              Creators Control ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our platform.
             </p>
           </section>
 

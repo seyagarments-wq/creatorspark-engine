@@ -22,11 +22,11 @@ const resend = new Resend((await getSecret("RESEND_API_KEY")));
 
 function getDay1Email(name: string): { subject: string; html: string } {
   return {
-    subject: "Welcome to Creatorsctrl — Let's get you set up! 🚀",
+    subject: "Welcome to Creators Control — Let's get you set up! 🚀",
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 16px;">
         <h2 style="color:#111;">Hey ${name}! 👋</h2>
-        <p style="color:#444;">Congrats again on being approved to join <strong>Creatorsctrl</strong>! We're excited to have you.</p>
+        <p style="color:#444;">Congrats again on being approved to join <strong>Creators Control</strong>! We're excited to have you.</p>
         <p style="color:#444;">To start earning, you'll need to complete a few quick steps:</p>
         <ol style="color:#444; line-height:1.8;">
           <li><strong>Create your account</strong> — Sign in at <a href="https://creatorsctrl.com/auth" style="color:#6366f1;">creatorsctrl.com</a></li>
@@ -49,14 +49,14 @@ function getDay1EveningEmail(name: string): { subject: string; html: string } {
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 16px;">
         <h2 style="color:#111;">Hey ${name}! 👋</h2>
-        <p style="color:#444;">Just wanted to make sure you saw the email from earlier — your <strong>Creatorsctrl</strong> account is approved and ready to go!</p>
+        <p style="color:#444;">Just wanted to make sure you saw the email from earlier — your <strong>Creators Control</strong> account is approved and ready to go!</p>
         <p style="color:#444;">All you need to do is sign in and complete a quick setup. It takes about 5 minutes:</p>
         <p style="margin-top:24px;">
           <a href="https://creatorsctrl.com/auth" style="background:#6366f1;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600;">Set Up Your Account</a>
         </p>
         <p style="color:#444;margin-top:24px;">If the link above doesn't work, just go to <a href="https://creatorsctrl.com/auth" style="color:#6366f1;">creatorsctrl.com/auth</a> directly.</p>
         <p style="color:#444;margin-top:16px;"><strong>💬 Having trouble or questions?</strong> Text Kohl (our founder) directly at <strong>(425) 588-1480</strong> and he'll get you sorted out personally!</p>
-        <p style="color:#888;font-size:13px;margin-top:32px;">The Creatorsctrl Team</p>
+        <p style="color:#888;font-size:13px;margin-top:32px;">The Creators Control Team</p>
       </div>
     `,
   };
@@ -88,7 +88,7 @@ function getDay5Email(name: string, missingSteps: string[]): { subject: string; 
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 16px;">
         <h2 style="color:#111;">Hey ${name}, we'd hate to see you miss out! 😊</h2>
-        <p style="color:#444;">You were approved to join Creatorsctrl 5 days ago, but it looks like you haven't finished setting up yet.</p>
+        <p style="color:#444;">You were approved to join Creators Control 5 days ago, but it looks like you haven't finished setting up yet.</p>
         <p style="color:#444;">Here's what's left:</p>
         <ul style="color:#444; line-height:1.8;">${stepsHtml}</ul>
         <p style="color:#444;">Other creators in the program are already earning — we want you to be next!</p>
@@ -96,7 +96,7 @@ function getDay5Email(name: string, missingSteps: string[]): { subject: string; 
         <p style="margin-top:24px;">
           <a href="https://creatorsctrl.com/auth" style="background:#6366f1;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600;">Finish Setup Now</a>
         </p>
-        <p style="color:#888;font-size:13px;margin-top:32px;">The Creatorsctrl Team</p>
+        <p style="color:#888;font-size:13px;margin-top:32px;">The Creators Control Team</p>
       </div>
     `,
   };
@@ -109,7 +109,7 @@ function getDay7Email(name: string, missingSteps: string[]): { subject: string; 
     html: `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 16px;">
         <h2 style="color:#111;">Hey ${name}, it's been a week! 👋</h2>
-        <p style="color:#444;">We approved you to join Creatorsctrl 7 days ago, and we really don't want you to miss out on this opportunity.</p>
+        <p style="color:#444;">We approved you to join Creators Control 7 days ago, and we really don't want you to miss out on this opportunity.</p>
         <p style="color:#444;">You're <strong>so close</strong> — here's what's left:</p>
         <ul style="color:#444; line-height:1.8;">${stepsHtml}</ul>
         <p style="color:#444;">Other creators who joined around the same time are already submitting videos and earning commissions. We want you to be right there with them! 💪</p>
@@ -117,7 +117,7 @@ function getDay7Email(name: string, missingSteps: string[]): { subject: string; 
         <p style="margin-top:24px;">
           <a href="https://creatorsctrl.com/auth" style="background:#6366f1;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600;">Finish Setup Now</a>
         </p>
-        <p style="color:#888;font-size:13px;margin-top:32px;">The Creatorsctrl Team</p>
+        <p style="color:#888;font-size:13px;margin-top:32px;">The Creators Control Team</p>
       </div>
     `,
   };
@@ -125,15 +125,15 @@ function getDay7Email(name: string, missingSteps: string[]): { subject: string; 
 
 function getDay10Email(name: string, brandName: string): { subject: string; html: string } {
   return {
-    subject: `You're invited to join ${brandName} on Creatorsctrl! 🎉`,
+    subject: `You're invited to join ${brandName} on Creators Control! 🎉`,
     html: `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background-color:#f4f4f5;margin:0;padding:24px;">
 <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:16px;padding:36px 32px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
   <div style="text-align:center;margin-bottom:28px;">
-    <span style="display:inline-block;background:linear-gradient(135deg,#8B5CF6,#7C3AED);color:white;padding:10px 20px;border-radius:10px;font-weight:700;font-size:18px;">Creatorsctrl</span>
+    <span style="display:inline-block;background:linear-gradient(135deg,#8B5CF6,#7C3AED);color:white;padding:10px 20px;border-radius:10px;font-weight:700;font-size:18px;">Creators Control</span>
   </div>
   <h2 style="color:#1f2937;text-align:center;margin:0 0 20px 0;">YOU'RE INVITED! 🎉</h2>
-  <p style="color:#4b5563;font-size:16px;margin:0 0 12px 0;line-height:1.6;">Hey ${name}, you've been invited to join <strong>${brandName}</strong> as a creator on Creatorsctrl.</p>
+  <p style="color:#4b5563;font-size:16px;margin:0 0 12px 0;line-height:1.6;">Hey ${name}, you've been invited to join <strong>${brandName}</strong> as a creator on Creators Control.</p>
   <p style="color:#4b5563;font-size:16px;margin:0 0 12px 0;line-height:1.6;">Click the button below to create your account and get started.</p>
   <div style="text-align:center;margin:28px 0 12px 0;">
     <a href="https://creatorsctrl.com/auth" style="display:inline-block;background-color:#8B5CF6;color:white;padding:14px 28px;text-decoration:none;border-radius:8px;font-weight:600;font-size:16px;">Accept Invitation</a>
@@ -227,7 +227,7 @@ Deno.serve(async (req) => {
       if (!hasVideo) missingSteps.push("Submit your first video");
 
       // Look up the creator's brand name for Day 10 re-invite
-      let brandName = "Creatorsctrl";
+      let brandName = "Creators Control";
       if (profile) {
         const { data: creatorBrand } = await supabase
           .from("creator_brands")
@@ -262,7 +262,7 @@ Deno.serve(async (req) => {
         }
 
         const { error: emailErr } = await resend.emails.send({
-          from: "Creatorsctrl <noreply@seyagarments.com>",
+          from: "Creators Control <noreply@seyagarments.com>",
           to: app.email,
           subject: emailContent.subject,
           html: emailContent.html,

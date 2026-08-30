@@ -21,7 +21,7 @@ function welcomeEmailHtml(firstName: string, brandName: string, appUrl: string):
 <body style="margin:0;padding:24px;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;">
 <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:18px;padding:36px 32px;box-shadow:0 1px 3px rgba(0,0,0,.08);">
   <div style="text-align:center;margin-bottom:24px;">
-    <span style="display:inline-block;background:linear-gradient(135deg,#0ea5e9,#2563eb);color:#fff;padding:10px 20px;border-radius:12px;font-weight:700;font-size:18px;">Creatorsctrl</span>
+    <span style="display:inline-block;background:linear-gradient(135deg,#0ea5e9,#2563eb);color:#fff;padding:10px 20px;border-radius:12px;font-weight:700;font-size:18px;">Creators Control</span>
   </div>
 
   <h1 style="margin:0 0 8px 0;font-size:24px;color:#0f172a;">You're the boss now, ${firstName} 👑</h1>
@@ -59,7 +59,7 @@ function welcomeEmailHtml(firstName: string, brandName: string, appUrl: string):
   </div>
 
   <p style="margin:26px 0 0 0;font-size:13px;color:#94a3b8;text-align:center;">
-    Sent to you because you created the owner account for ${brandName} on Creatorsctrl.
+    Sent to you because you created the owner account for ${brandName} on Creators Control.
   </p>
 </div></body></html>`;
 }
@@ -72,7 +72,7 @@ async function sendWelcomeEmail(email: string, fullName: string, brandName: stri
       return;
     }
     const appUrl = (await getSecret("APP_URL")) || "https://creators.seyagarments.com";
-    const from = (await getSecret("EMAIL_FROM")) || "Creatorsctrl <noreply@seyagarments.com>";
+    const from = (await getSecret("EMAIL_FROM")) || "Creators Control <noreply@seyagarments.com>";
     const firstName = fullName.split(" ")[0] || "there";
 
     const res = await fetch("https://api.resend.com/emails", {

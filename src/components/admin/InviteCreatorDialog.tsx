@@ -145,7 +145,7 @@ export default function InviteCreatorDialog({
       const { error: emailError } = await supabase.functions.invoke("send-invite-email", {
         body: {
           email: email.toLowerCase(),
-          brand_name: selectedBrand?.name || "Creatorsctrl",
+          brand_name: selectedBrand?.name || "Creators Control",
           invite_link: link,
         },
       });

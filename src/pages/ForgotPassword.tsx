@@ -56,8 +56,8 @@ export default function ForgotPassword() {
         <div className="w-full max-w-md">
           {/* Logo */}
           <div className="flex items-center justify-center gap-3 mb-8">
-            <img src={logo} alt="Creatorsctrl" className="w-12 h-12 rounded-xl" />
-            <span className="font-bold text-2xl">Creatorsctrl</span>
+            <img src={logo} alt="Creators Control" className="w-12 h-12 rounded-xl" />
+            <span className="font-bold text-2xl">Creators Control</span>
           </div>
 
           <div className="bg-card border rounded-xl p-8 shadow-sm text-center">
@@ -90,8 +90,8 @@ export default function ForgotPassword() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-8">
-          <img src={logo} alt="Creatorsctrl" className="w-12 h-12 rounded-xl" />
-          <span className="font-bold text-2xl">Creatorsctrl</span>
+          <img src={logo} alt="Creators Control" className="w-12 h-12 rounded-xl" />
+          <span className="font-bold text-2xl">Creators Control</span>
         </div>
 
         {/* Form Card */}

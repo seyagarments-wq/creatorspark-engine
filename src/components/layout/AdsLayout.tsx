@@ -66,9 +66,9 @@ export default function AdsLayout({ children }: AdsLayoutProps) {
         <div className="flex flex-col h-full">
           {/* Logo + Title */}
           <div className="h-16 flex items-center gap-3 px-6">
-            <img src={logo} alt="Creatorsctrl" className="w-9 h-9 rounded-xl shadow-glow-sm" />
+            <img src={logo} alt="Creators Control" className="w-9 h-9 rounded-xl shadow-glow-sm" />
             <div className="flex flex-col">
-              <span className="font-semibold text-sm">Creatorsctrl</span>
+              <span className="font-semibold text-sm">Creators Control</span>
               <span className="text-xs text-muted-foreground">Ads Manager</span>
             </div>
           </div>

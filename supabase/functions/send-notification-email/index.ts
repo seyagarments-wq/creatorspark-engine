@@ -49,13 +49,13 @@ function getEmailHtml(message: string, link?: string, buttonText?: string, recip
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;background-color:#f4f4f5;margin:0;padding:24px;">
   <div style="max-width:560px;margin:0 auto;background-color:#ffffff;border-radius:16px;padding:36px 32px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
     <div style="text-align:center;margin-bottom:28px;">
-      <span style="display:inline-block;background:linear-gradient(135deg,#8B5CF6,#7C3AED);color:white;padding:10px 20px;border-radius:10px;font-weight:700;font-size:18px;letter-spacing:-0.3px;">Creatorsctrl</span>
+      <span style="display:inline-block;background:linear-gradient(135deg,#8B5CF6,#7C3AED);color:white;padding:10px 20px;border-radius:10px;font-weight:700;font-size:18px;letter-spacing:-0.3px;">Creators Control</span>
     </div>
     ${greeting}
     ${paragraphs}
     ${buttonHtml}
     <div style="margin-top:36px;padding-top:20px;border-top:1px solid #e5e7eb;text-align:center;">
-      <p style="color:#a1a1aa;font-size:12px;margin:0;">Creatorsctrl &bull; Manage preferences in your profile settings</p>
+      <p style="color:#a1a1aa;font-size:12px;margin:0;">Creators Control &bull; Manage preferences in your profile settings</p>
     </div>
   </div>
 </body>
@@ -165,7 +165,7 @@ const handler = async (req: Request): Promise<Response> => {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${RESEND_API_KEY}` },
       body: JSON.stringify({
-        from: `${from_name || "Creatorsctrl"} <noreply@seyagarments.com>`,
+        from: `${from_name || "Creators Control"} <noreply@seyagarments.com>`,
         to: [profile.email],
         subject: title,
         html: getEmailHtml(message, fullLink, button_text, profile.full_name),

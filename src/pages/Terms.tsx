@@ -10,8 +10,8 @@ export default function Terms() {
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="container max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <img src={logo} alt="Creatorsctrl" className="w-8 h-8 rounded-lg" />
-            <span className="font-bold text-lg">Creatorsctrl</span>
+            <img src={logo} alt="Creators Control" className="w-8 h-8 rounded-lg" />
+            <span className="font-bold text-lg">Creators Control</span>
           </Link>
           <Button variant="ghost" size="sm" asChild>
             <Link to="/">
@@ -31,14 +31,14 @@ export default function Terms() {
           <section>
             <h2 className="text-xl font-semibold mb-4">1. Acceptance of Terms</h2>
             <p className="text-muted-foreground leading-relaxed">
-              By accessing or using the Creatorsctrl platform ("Service"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, you may not use the Service.
+              By accessing or using the Creators Control platform ("Service"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, you may not use the Service.
             </p>
           </section>
 
           <section>
             <h2 className="text-xl font-semibold mb-4">2. Description of Service</h2>
             <p className="text-muted-foreground leading-relaxed">
-              Creatorsctrl is a UGC (User-Generated Content) creator management platform that connects content creators with brands for the purpose of creating promotional video content. The platform facilitates video submissions, performance tracking, and creator compensation.
+              Creators Control is a UGC (User-Generated Content) creator management platform that connects content creators with brands for the purpose of creating promotional video content. The platform facilitates video submissions, performance tracking, and creator compensation.
             </p>
           </section>
 

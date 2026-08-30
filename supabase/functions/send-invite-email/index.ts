@@ -20,10 +20,10 @@ function getInviteEmailHtml(inviteLink: string, brandName: string): string {
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background-color:#f4f4f5;margin:0;padding:24px;">
 <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:16px;padding:36px 32px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
   <div style="text-align:center;margin-bottom:28px;">
-    <span style="display:inline-block;background:linear-gradient(135deg,#8B5CF6,#7C3AED);color:white;padding:10px 20px;border-radius:10px;font-weight:700;font-size:18px;">Creatorsctrl</span>
+    <span style="display:inline-block;background:linear-gradient(135deg,#8B5CF6,#7C3AED);color:white;padding:10px 20px;border-radius:10px;font-weight:700;font-size:18px;">Creators Control</span>
   </div>
   <p style="color:#1f2937;font-size:16px;margin:0 0 16px 0;font-weight:500;">Hello,</p>
-  <p style="color:#4b5563;font-size:16px;margin:0 0 12px 0;line-height:1.6;">You have been invited to join ${brandName} on Creatorsctrl, our platform for managing content submissions, performance, and payouts.</p>
+  <p style="color:#4b5563;font-size:16px;margin:0 0 12px 0;line-height:1.6;">You have been invited to join ${brandName} on Creators Control, our platform for managing content submissions, performance, and payouts.</p>
   <p style="color:#4b5563;font-size:16px;margin:0 0 12px 0;line-height:1.6;">To accept the invitation and set up your account, click the button below.</p>
   <div style="text-align:center;margin:28px 0 12px 0;">
     <a href="${inviteLink}" style="display:inline-block;background-color:#8B5CF6;color:white;padding:14px 28px;text-decoration:none;border-radius:8px;font-weight:600;font-size:16px;">Accept invitation</a>
@@ -54,9 +54,9 @@ const handler = async (req: Request): Promise<Response> => {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${RESEND_API_KEY}` },
       body: JSON.stringify({
-        from: "Creatorsctrl <noreply@seyagarments.com>",
+        from: "Creators Control <noreply@seyagarments.com>",
         to: [email],
-        subject: `[Action Required] Your invitation to ${brand_name} on Creatorsctrl`,
+        subject: `[Action Required] Your invitation to ${brand_name} on Creators Control`,
         html: getInviteEmailHtml(invite_link, brand_name),
       }),
     });

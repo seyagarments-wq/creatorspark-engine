@@ -24,8 +24,8 @@ export default defineConfig(({ mode }) => ({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "robots.txt"],
       manifest: {
-        name: "Creatorsctrl",
-        short_name: "Creatorsctrl",
+        name: "Creators Control",
+        short_name: "Creators Control",
         description: "The ultimate UGC creator management platform",
         theme_color: "#8B5CF6",
         background_color: "#0F0F0F",

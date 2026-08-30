@@ -113,13 +113,13 @@ serve(async (req) => {
       const resend = new Resend(resendApiKey);
 
       await resend.emails.send({
-        from: "Creatorsctrl <noreply@seyagarments.com>",
+        from: "Creators Control <noreply@seyagarments.com>",
         to: [email],
-        subject: "🎉 You've been approved — Welcome to Creatorsctrl!",
+        subject: "🎉 You've been approved — Welcome to Creators Control!",
         html: `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 16px;">
             <h2 style="color:#111;">HEY ${full_name}! 👋</h2>
-            <p style="color:#444;">Congrats again on being approved to join <strong>Creatorsctrl</strong>! We're excited to have you.</p>
+            <p style="color:#444;">Congrats again on being approved to join <strong>Creators Control</strong>! We're excited to have you.</p>
             <p style="color:#444;">To start earning, you'll need to complete a few quick steps:</p>
             <ol style="color:#444; line-height:1.8;">
               <li><strong>Create your account</strong> — Sign in at <a href="https://creatorsctrl.com/auth" style="color:#6366f1;">creatorsctrl.com</a></li>

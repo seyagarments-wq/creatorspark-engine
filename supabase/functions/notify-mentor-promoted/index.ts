@@ -26,7 +26,7 @@ serve(async (req: Request) => {
 
     if (!mentor) throw new Error("Mentor profile not found");
 
-    const message = `Hello ${mentor.full_name},\n\nYou have been promoted to Mentor on Creatorsctrl. This decision was based on your content quality, consistency, and overall contribution to the platform.\n\nAs a mentor, your responsibilities include:\n\n1. Reviewing assigned videos in the "Content Review" tab.\n2. Reaching out to creators via DM with specific, actionable feedback.\n3. Sharing examples of effective content and explaining what makes them work.\n\nA new "Content Review" tab is now available in your account. Assignments will appear there as they are created. Please respond to new assignments in a timely manner.\n\nThank you for taking on this role.\n\n— The Creatorsctrl team`;
+    const message = `Hello ${mentor.full_name},\n\nYou have been promoted to Mentor on Creators Control. This decision was based on your content quality, consistency, and overall contribution to the platform.\n\nAs a mentor, your responsibilities include:\n\n1. Reviewing assigned videos in the "Content Review" tab.\n2. Reaching out to creators via DM with specific, actionable feedback.\n3. Sharing examples of effective content and explaining what makes them work.\n\nA new "Content Review" tab is now available in your account. Assignments will appear there as they are created. Please respond to new assignments in a timely manner.\n\nThank you for taking on this role.\n\n— The Creators Control team`;
 
     await fetch(`${supabaseUrl}/functions/v1/send-notification-email`, {
       method: "POST",

@@ -141,8 +141,8 @@ export function AdminBottomNav() {
         <SheetContent side="bottom" className="pb-[env(safe-area-inset-bottom)] rounded-t-2xl max-h-[70vh]">
           <SheetHeader className="pb-2">
             <SheetTitle className="flex items-center gap-2">
-              <img src={logo} alt="Creatorsctrl" className="w-7 h-7 rounded-lg" />
-              Creatorsctrl
+              <img src={logo} alt="Creators Control" className="w-7 h-7 rounded-lg" />
+              Creators Control
             </SheetTitle>
           </SheetHeader>
           <div className="space-y-5 overflow-y-auto">
