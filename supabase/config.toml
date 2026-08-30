@@ -18,9 +18,6 @@ verify_jwt = false
 [functions.calculate-monthly-payouts]
 verify_jwt = false
 
-[functions.process-weekly-commissions]
-verify_jwt = false
-
 [functions.instagram-oauth]
 verify_jwt = false
 
@@ -93,9 +90,6 @@ verify_jwt = false
 [functions.meta-data-deletion]
 verify_jwt = false
 
-[functions.send-weekly-reminders]
-verify_jwt = false
-
 [functions.broadcast-peer-notification]
 verify_jwt = false
 
@@ -109,9 +103,6 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.notify-chat-message]
-verify_jwt = false
-
-[functions.send-weekly-digest]
 verify_jwt = false
 
 [functions.send-referral-email]
