@@ -36,6 +36,7 @@ export default function Landing() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [needsSetup, setNeedsSetup] = useState(false);
   
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -86,11 +87,21 @@ export default function Landing() {
     };
   }, []);
 
+  // First-run detection: if the platform has no admin yet, send the owner to setup
+  useEffect(() => {
+    if (inviteToken) return;
+    supabase.functions
+      .invoke("owner-bootstrap", { body: { action: "status" } })
+      .then(({ data }) => setNeedsSetup(!!data?.needsSetup))
+      .catch(() => setNeedsSetup(false));
+  }, [inviteToken]);
+
   useEffect(() => {
     if (inviteToken) {
       validateInvite(inviteToken);
     }
   }, [inviteToken]);
+
 
   async function validateInvite(token: string) {
     setValidatingInvite(true);
@@ -441,9 +452,21 @@ export default function Landing() {
           )}
         </div>
 
-        <p className="text-xs text-muted-foreground/50 text-center mt-6">
-          Need an account? Contact your admin for an invite link.
-        </p>
+        {needsSetup ? (
+          <div className="mt-6 rounded-xl border border-primary/30 bg-primary/5 p-4 text-center">
+            <p className="text-sm text-foreground font-medium mb-1">First time here?</p>
+            <p className="text-xs text-muted-foreground mb-3">
+              No owner account exists yet. Set up your brand and admin login to get started.
+            </p>
+            <Button asChild size="sm" className="bg-gradient-purple hover:opacity-90 text-white">
+              <Link to="/setup">Start setup</Link>
+            </Button>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground/50 text-center mt-6">
+            Need an account? Contact your admin for an invite link.
+          </p>
+        )}
       </div>
     </div>
   );

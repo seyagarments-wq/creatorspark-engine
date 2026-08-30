@@ -20,6 +20,7 @@ const Install = lazy(() => import("./pages/Install"));
 const ReferralSignup = lazy(() => import("./pages/ReferralSignup"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const OwnerSetup = lazy(() => import("./pages/OwnerSetup"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const DataDeletion = lazy(() => import("./pages/DataDeletion"));
@@ -124,6 +125,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/auth" element={<Landing />} />
+        <Route path="/setup" element={<OwnerSetup />} />
         <Route path="/referral-signup" element={<ReferralSignup />} />
         <Route path="/install" element={<Install />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
