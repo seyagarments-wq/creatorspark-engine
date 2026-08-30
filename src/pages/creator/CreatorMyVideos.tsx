@@ -58,6 +58,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CopyableVideoId } from "@/components/video/CopyableVideoId";
 import { CommentBubble } from "@/components/video/CommentBubble";
 import { VideoCommentThread } from "@/components/video/VideoCommentThread";
+import { GrowthTracker } from "@/components/creator/GrowthTracker";
 
 interface VideoData {
   id: string;
