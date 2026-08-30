@@ -18,6 +18,7 @@ import {
   MonitorPlay,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import logo from "@/assets/logo.png";
 import {
   Sheet,
   SheetContent,
@@ -140,9 +141,7 @@ export function AdminBottomNav() {
         <SheetContent side="bottom" className="pb-[env(safe-area-inset-bottom)] rounded-t-2xl max-h-[70vh]">
           <SheetHeader className="pb-2">
             <SheetTitle className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center">
-                <Zap className="w-4 h-4 text-primary-foreground" />
-              </div>
+              <img src={logo} alt="Creatorsctrl" className="w-7 h-7 rounded-lg" />
               Creatorsctrl
             </SheetTitle>
           </SheetHeader>

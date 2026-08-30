@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Zap, Loader2, CheckCircle, Instagram, Video, User, Mail, Lock, Phone, Upload, Link2, X } from "lucide-react";
+import logo from "@/assets/logo.png";
 
 interface ReferrerInfo {
   full_name: string;
@@ -210,9 +211,7 @@ export default function ReferralSignup() {
         <div className="w-full max-w-md space-y-6">
           {/* Logo */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-              <Zap className="w-6 h-6 text-primary-foreground" />
-            </div>
+            <img src={logo} alt="Creatorsctrl" className="w-10 h-10 rounded-xl" />
             <span className="font-bold text-xl">Creatorsctrl</span>
           </div>
 

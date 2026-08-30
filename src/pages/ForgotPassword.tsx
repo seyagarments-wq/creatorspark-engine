@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Zap, Loader2, CheckCircle, ArrowLeft, Mail } from "lucide-react";
+import logo from "@/assets/logo.png";
 import { z } from "zod";
 
 const emailSchema = z.string().email("Please enter a valid email address");
@@ -91,9 +92,7 @@ export default function ForgotPassword() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center">
-            <Zap className="w-7 h-7 text-primary-foreground" />
-          </div>
+          <img src={logo} alt="Creatorsctrl" className="w-12 h-12 rounded-xl" />
           <span className="font-bold text-2xl">Creatorsctrl</span>
         </div>
 

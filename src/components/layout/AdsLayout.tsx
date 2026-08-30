@@ -23,6 +23,7 @@ import {
   Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import logo from "@/assets/logo.png";
 import {
   Sheet,
   SheetContent,
@@ -65,9 +66,7 @@ export default function AdsLayout({ children }: AdsLayoutProps) {
         <div className="flex flex-col h-full">
           {/* Logo + Title */}
           <div className="h-16 flex items-center gap-3 px-6">
-            <div className="w-9 h-9 rounded-xl bg-gradient-purple flex items-center justify-center shadow-glow-sm">
-              <Zap className="w-5 h-5 text-white" />
-            </div>
+            <img src={logo} alt="Creatorsctrl" className="w-9 h-9 rounded-xl shadow-glow-sm" />
             <div className="flex flex-col">
               <span className="font-semibold text-sm">Creatorsctrl</span>
               <span className="text-xs text-muted-foreground">Ads Manager</span>
