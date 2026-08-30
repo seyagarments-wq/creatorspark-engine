@@ -56,9 +56,7 @@ export default function ForgotPassword() {
         <div className="w-full max-w-md">
           {/* Logo */}
           <div className="flex items-center justify-center gap-3 mb-8">
-            <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center">
-              <Zap className="w-7 h-7 text-primary-foreground" />
-            </div>
+            <img src={logo} alt="Creatorsctrl" className="w-12 h-12 rounded-xl" />
             <span className="font-bold text-2xl">Creatorsctrl</span>
           </div>
 

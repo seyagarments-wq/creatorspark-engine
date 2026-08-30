@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Zap, Download, Smartphone, Bell, CheckCircle2, Share, MoreVertical, PlusSquare } from "lucide-react";
+import logo from "@/assets/logo.png";
 import { useNavigate } from "react-router-dom";
 import { usePushNotifications } from "@/hooks/use-push-notifications";
 
@@ -65,9 +66,7 @@ export default function Install() {
       {/* Header */}
       <header className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-            <Zap className="w-6 h-6 text-primary-foreground" />
-          </div>
+          <img src={logo} alt="Creatorsctrl" className="w-10 h-10 rounded-xl" />
           <span className="font-bold text-xl">Creatorsctrl</span>
         </div>
         <Button variant="ghost" onClick={() => navigate("/auth")}>
@@ -78,9 +77,7 @@ export default function Install() {
       <main className="container max-w-lg mx-auto px-4 py-8 space-y-6">
         {/* Hero */}
         <div className="text-center space-y-4">
-          <div className="w-24 h-24 rounded-3xl bg-primary flex items-center justify-center mx-auto shadow-lg shadow-primary/25">
-            <Zap className="w-14 h-14 text-primary-foreground" />
-          </div>
+          <img src={logo} alt="Creatorsctrl" className="w-24 h-24 rounded-3xl mx-auto shadow-lg shadow-primary/25" />
           <h1 className="text-3xl font-bold">Get the App</h1>
           <p className="text-muted-foreground">
             Install Creatorsctrl for the best experience with push notifications and quick access.

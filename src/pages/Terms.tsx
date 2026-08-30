@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Zap, ArrowLeft } from "lucide-react";
+import logo from "@/assets/logo.png";
 
 export default function Terms() {
   return (
@@ -9,9 +10,7 @@ export default function Terms() {
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="container max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <Zap className="w-5 h-5 text-primary-foreground" />
-            </div>
+            <img src={logo} alt="Creatorsctrl" className="w-8 h-8 rounded-lg" />
             <span className="font-bold text-lg">Creatorsctrl</span>
           </Link>
           <Button variant="ghost" size="sm" asChild>
