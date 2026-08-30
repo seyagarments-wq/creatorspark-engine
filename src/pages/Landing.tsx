@@ -37,6 +37,7 @@ export default function Landing() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [needsSetup, setNeedsSetup] = useState(false);
   
   
   const navigate = useNavigate();
