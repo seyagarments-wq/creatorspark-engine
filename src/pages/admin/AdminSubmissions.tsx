@@ -2018,6 +2018,17 @@ export default function AdminSubmissions() {
         preselectedIds={selectedIds.size === 2 ? Array.from(selectedIds) : undefined}
       />
 
+      {/* Detailed Review Dialog */}
+      <VideoReviewDialog
+        open={reviewDialogOpen}
+        onOpenChange={setReviewDialogOpen}
+        videoId={reviewVideo?.id || null}
+        videoTitle={reviewVideo?.title}
+        videoUrl={reviewVideo?.video_url}
+        creatorName={(reviewVideo as any)?.creator_name}
+        onSaved={() => setReviewVideo(null)}
+      />
+
       {/* Mentor Assignment Dialog */}
       <Dialog open={mentorDialogOpen} onOpenChange={setMentorDialogOpen}>
         <DialogContent>
