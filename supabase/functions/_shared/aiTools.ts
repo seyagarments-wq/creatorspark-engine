@@ -1,5 +1,6 @@
 // Shared tool definitions + executor for the AI Workbook and scheduled agents.
 import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { getAIProvider } from "./ai.ts";
 
 export type Ctx = {
   admin: SupabaseClient;
@@ -284,19 +285,23 @@ export async function runAgentLoop(
   ctx: Ctx,
   maxSteps = 8,
 ): Promise<AgentResult> {
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
-  if (!apiKey) throw new Error("LOVABLE_API_KEY is not configured");
+  const provider = await getAIProvider();
+  if (!provider || !provider.responsesUrl) {
+    throw new Error(
+      "The AI assistant needs an OpenAI or Lovable AI key. Add one in Admin \u2192 Setup.",
+    );
+  }
 
   const activity: any[] = [];
   const pendingActions: any[] = [];
   const messages: any[] = [...input];
 
   for (let step = 0; step < maxSteps; step++) {
-    const res = await fetch(GATEWAY, {
+    const res = await fetch(provider.responsesUrl, {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${provider.key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "openai/gpt-5.6-sol",
+        model: provider.model,
         instructions: system,
         input: messages,
         tools: toolsForRole(ctx.role),
