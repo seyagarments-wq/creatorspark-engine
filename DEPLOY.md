@@ -67,3 +67,28 @@ Values are stored in the `platform_secrets` table (service-role only, no client 
 and resolved by edge functions via `supabase/functions/_shared/secrets.ts`:
 environment variable first, then the admin-saved value. So you can either set
 Supabase Edge Function secrets yourself, or let the admin do it in the app — both work.
+
+## Client hand-off: everything is configured in-app
+
+After the client signs in with their admin account, they open **Admin → Setup**
+(`/admin/setup`) and fill in each card — no environment variables, no developer:
+
+| Card | What it turns on |
+| --- | --- |
+| Shopify | Product picker + free sample orders |
+| Resend | All outbound email |
+| Stripe | Creator Connect payouts |
+| Meta / Facebook Ads | Ad insights, uploads, campaign launches |
+| PayPal (optional) | Alternative payouts |
+| AI assistant & AI features | AI assistant/agents, brief generation, hook scores, digests |
+| Push notifications (optional) | Web push (VAPID key pair) |
+| App URLs | Email links + OAuth redirects |
+
+Each card has step-by-step instructions, a masked "Saved" state, and a
+**Test connection** button. Values are stored in `public.platform_secrets`
+(service-role only) and every edge function reads the Supabase env var first and
+falls back to the admin-saved value.
+
+AI is provider-agnostic: OpenAI, Anthropic or a Lovable gateway key all work.
+OpenAI is recommended because the AI assistant/agents use the Responses API
+(OpenAI or Lovable gateway only). `AI_MODEL` optionally overrides the default model.
