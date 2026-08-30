@@ -1,4 +1,4 @@
-project_id = "mhrvfmlzeabkxnodxcve"
+project_id = "abqfarkftkbkmmzozdyv"
 
 [functions.create-connect-account]
 verify_jwt = false
