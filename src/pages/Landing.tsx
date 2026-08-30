@@ -86,11 +86,21 @@ export default function Landing() {
     };
   }, []);
 
+  // First-run detection: if the platform has no admin yet, send the owner to setup
+  useEffect(() => {
+    if (inviteToken) return;
+    supabase.functions
+      .invoke("owner-bootstrap", { body: { action: "status" } })
+      .then(({ data }) => setNeedsSetup(!!data?.needsSetup))
+      .catch(() => setNeedsSetup(false));
+  }, [inviteToken]);
+
   useEffect(() => {
     if (inviteToken) {
       validateInvite(inviteToken);
     }
   }, [inviteToken]);
+
 
   async function validateInvite(token: string) {
     setValidatingInvite(true);
