@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getSecret } from "../_shared/secrets.ts";
+import { aiChatCompletion } from "../_shared/ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -165,21 +166,14 @@ Analyze the patterns and provide insights in this JSON format:
   "summary": "<2-3 sentence executive summary>"
 }`;
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${lovableApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    const aiResponse = await aiChatCompletion({
         model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: "You are a Meta Ads creative strategist. Always respond with valid JSON." },
           { role: "user", content: aiPrompt }
         ],
         temperature: 0.4,
-      }),
-    });
+      });
 
     let analysis;
     if (aiResponse.ok) {
