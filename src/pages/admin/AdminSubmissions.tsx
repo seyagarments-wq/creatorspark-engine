@@ -60,6 +60,7 @@ import {
   ChevronLeft,
   ChevronRight,
   UserPlus,
+  ClipboardCheck,
 } from "lucide-react";
 import { formatDistanceToNow, startOfWeek, subWeeks, subDays, isAfter } from "date-fns";
 import { VideoThumbnail } from "@/components/video/VideoThumbnail";
