@@ -28,6 +28,7 @@ const DataDeletion = lazy(() => import("./pages/DataDeletion"));
 // Creator pages
 const CreatorHome = lazy(() => import("./pages/creator/CreatorHome"));
 const CreatorMyVideos = lazy(() => import("./pages/creator/CreatorMyVideos"));
+const CreatorVideoDetail = lazy(() => import("./pages/creator/CreatorVideoDetail"));
 const CreatorSubmit = lazy(() => import("./pages/creator/CreatorSubmit"));
 const CreatorPayouts = lazy(() => import("./pages/creator/CreatorPayouts"));
 const CreatorProfile = lazy(() => import("./pages/creator/CreatorProfile"));
