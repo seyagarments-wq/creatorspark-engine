@@ -20,6 +20,7 @@ const Install = lazy(() => import("./pages/Install"));
 const ReferralSignup = lazy(() => import("./pages/ReferralSignup"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const OwnerSetup = lazy(() => import("./pages/OwnerSetup"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const DataDeletion = lazy(() => import("./pages/DataDeletion"));
