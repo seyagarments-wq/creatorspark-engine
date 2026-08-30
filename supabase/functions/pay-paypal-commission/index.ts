@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { getSecret } from "../_shared/secrets.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -38,8 +39,8 @@ serve(async (req) => {
   try {
     logStep("Function started");
 
-    const paypalClientId = Deno.env.get("PAYPAL_CLIENT_ID");
-    const paypalClientSecret = Deno.env.get("PAYPAL_CLIENT_SECRET");
+    const paypalClientId = (await getSecret("PAYPAL_CLIENT_ID"));
+    const paypalClientSecret = (await getSecret("PAYPAL_CLIENT_SECRET"));
     if (!paypalClientId || !paypalClientSecret) {
       throw new Error("PayPal API credentials are not configured. Please add PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET.");
     }

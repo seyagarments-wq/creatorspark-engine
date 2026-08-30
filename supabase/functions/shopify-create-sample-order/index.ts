@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getSecret } from "../_shared/secrets.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,12 +8,12 @@ const corsHeaders = {
 };
 
 async function getAccessToken(): Promise<string> {
-  const shopDomain = Deno.env.get("SHOPIFY_STORE_DOMAIN");
-  const directToken = Deno.env.get("SHOPIFY_ACCESS_TOKEN");
+  const shopDomain = (await getSecret("SHOPIFY_STORE_DOMAIN"));
+  const directToken = (await getSecret("SHOPIFY_ACCESS_TOKEN"));
   if (directToken) return directToken;
 
-  const clientId = Deno.env.get("SHOPIFY_CLIENT_ID");
-  const clientSecret = Deno.env.get("SHOPIFY_CLIENT_SECRET");
+  const clientId = (await getSecret("SHOPIFY_CLIENT_ID"));
+  const clientSecret = (await getSecret("SHOPIFY_CLIENT_SECRET"));
 
   if (!shopDomain || !clientId || !clientSecret) {
     throw new Error("Missing Shopify credentials");
@@ -135,7 +136,7 @@ serve(async (req) => {
       throw new Error("No Shopify variant selected for this sample request");
     }
 
-    const shopDomain = Deno.env.get("SHOPIFY_STORE_DOMAIN");
+    const shopDomain = (await getSecret("SHOPIFY_STORE_DOMAIN"));
     if (!shopDomain) {
       throw new Error("SHOPIFY_STORE_DOMAIN not configured");
     }

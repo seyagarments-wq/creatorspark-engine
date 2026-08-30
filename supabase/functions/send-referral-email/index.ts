@@ -1,11 +1,12 @@
 import { Resend } from "npm:resend@2.0.0";
+import { getSecret } from "../_shared/secrets.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
+const resend = new Resend((await getSecret("RESEND_API_KEY")));
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
