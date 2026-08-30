@@ -23,9 +23,16 @@ const ALLOWED_KEYS = [
   "OPENAI_API_KEY",
   "ANTHROPIC_API_KEY",
   "LOVABLE_API_KEY",
+  "AI_MODEL",
+  "VAPID_PUBLIC_KEY",
+  "VAPID_PRIVATE_KEY",
+  "APPLE_PUSH_FUNCTION_URL",
+  "APPLE_PUSH_AUTH_SECRET",
+  "FACEBOOK_OAUTH_SCOPES",
   "APP_URL",
   "SITE_URL",
 ] as const;
+
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
