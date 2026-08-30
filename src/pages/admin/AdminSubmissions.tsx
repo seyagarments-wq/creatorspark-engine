@@ -69,6 +69,7 @@ import { CommentBubble } from "@/components/video/CommentBubble";
 import { VideoCommentThread } from "@/components/video/VideoCommentThread";
 import { VideoTrimDialog } from "@/components/admin/VideoTrimDialog";
 import { VideoCompareDialog } from "@/components/video/VideoCompareDialog";
+import { VideoReviewDialog } from "@/components/video/VideoReviewDialog";
 import { useAuth } from "@/lib/auth";
 import { StickerPicker } from "@/components/chat/StickerPicker";
 
