@@ -275,7 +275,6 @@ export async function runTool(name: string, args: any, ctx: Ctx): Promise<any> {
   }
 }
 
-const GATEWAY = "https://ai.gateway.lovable.dev/v1/responses";
 
 export type AgentResult = { text: string; activity: any[]; pendingActions: any[] };
 
