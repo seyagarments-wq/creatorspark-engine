@@ -21,6 +21,7 @@ import {
   Radar,
   MessageCircle,
   SlidersHorizontal,
+  PlugZap,
   LogOut,
   Search,
   Bell,
