@@ -52,12 +52,16 @@ const INTEGRATIONS: Integration[] = [
       "Enable read_products, write_orders, read_orders, read_customers and write_customers, then save.",
       "Open the API credentials tab and click Install app, then reveal the Admin API access token (starts with shpat_).",
       "Paste your store domain and that token below and press Save, then Test connection.",
+      "The Client ID / Client secret fields are only needed if you use Shopify OAuth instead of the Admin token — leave them blank otherwise.",
     ],
     fields: [
       { key: "SHOPIFY_STORE_DOMAIN", label: "Store domain", placeholder: "your-store.myshopify.com" },
       { key: "SHOPIFY_ACCESS_TOKEN", label: "Admin API access token", placeholder: "shpat_..." },
+      { key: "SHOPIFY_CLIENT_ID", label: "Client ID", optional: true },
+      { key: "SHOPIFY_CLIENT_SECRET", label: "Client secret", optional: true },
     ],
   },
+
   {
     id: "resend",
     name: "Resend (email)",
@@ -121,16 +125,48 @@ const INTEGRATIONS: Integration[] = [
   },
   {
     id: "ai",
-    name: "AI features (optional)",
-    description: "Brief generation, hook analysis and the AI assistant.",
+    name: "AI assistant & AI features",
+    description:
+      "Powers the AI assistant/agents, brief generation, hook scoring and the performance digest.",
+    testable: true,
+    docsUrl: "https://platform.openai.com/api-keys",
     steps: [
-      "Add one key: OpenAI, Anthropic, or a Lovable AI Gateway key.",
-      "Without a key, AI features stay disabled — everything else works fine.",
+      "Pick one provider. OpenAI is recommended — it powers every AI feature including the AI assistant and agents.",
+      "OpenAI: go to platform.openai.com → API keys → Create new secret key (starts with sk-), and make sure billing is enabled.",
+      "Anthropic (optional alternative): console.anthropic.com → API keys. Note the AI assistant/agents need OpenAI; briefs and analysis work with Anthropic.",
+      "Lovable AI Gateway key: only if you were given one.",
+      "Model is optional — leave blank to use the sensible default (gpt-4o-mini on OpenAI).",
+      "Save, then press Test connection: it sends one tiny prompt to confirm the key works.",
     ],
     fields: [
       { key: "OPENAI_API_KEY", label: "OpenAI API key", placeholder: "sk-...", optional: true },
-      { key: "ANTHROPIC_API_KEY", label: "Anthropic API key", optional: true },
+      { key: "ANTHROPIC_API_KEY", label: "Anthropic API key", placeholder: "sk-ant-...", optional: true },
       { key: "LOVABLE_API_KEY", label: "Lovable AI Gateway key", optional: true },
+      {
+        key: "AI_MODEL",
+        label: "Model override",
+        placeholder: "gpt-4o-mini",
+        optional: true,
+        help: "Leave blank for the default model.",
+      },
+    ],
+  },
+  {
+    id: "push",
+    name: "Push notifications (optional)",
+    description: "Web push alerts for creators on iOS home-screen installs and browsers.",
+    testable: true,
+    docsUrl: "https://vapidkeys.com/",
+    steps: [
+      "Generate a VAPID key pair — run `npx web-push generate-vapid-keys` in a terminal, or use vapidkeys.com.",
+      "Paste the public key and the private key below and save, then Test connection.",
+      "Apple push relay fields are only needed if you run the separate Apple push function — leave blank otherwise.",
+    ],
+    fields: [
+      { key: "VAPID_PUBLIC_KEY", label: "VAPID public key" },
+      { key: "VAPID_PRIVATE_KEY", label: "VAPID private key" },
+      { key: "APPLE_PUSH_FUNCTION_URL", label: "Apple push function URL", optional: true },
+      { key: "APPLE_PUSH_AUTH_SECRET", label: "Apple push auth secret", optional: true },
     ],
   },
   {
@@ -143,8 +179,16 @@ const INTEGRATIONS: Integration[] = [
     fields: [
       { key: "APP_URL", label: "App URL", placeholder: "https://creators.yourdomain.com" },
       { key: "SITE_URL", label: "Site URL", placeholder: "https://creators.yourdomain.com", optional: true },
+      {
+        key: "FACEBOOK_OAUTH_SCOPES",
+        label: "Facebook OAuth scopes",
+        placeholder: "ads_management,ads_read,business_management",
+        optional: true,
+        help: "Advanced — only change if Meta app review requires different scopes.",
+      },
     ],
   },
+
 ];
 
 export default function AdminSetup() {
@@ -331,7 +375,12 @@ export default function AdminSetup() {
                             </Label>
                             <Input
                               id={field.key}
-                              type={field.key.includes("DOMAIN") || field.key.endsWith("URL") || field.key.endsWith("_ID") ? "text" : "password"}
+                              type={
+                                /DOMAIN|URL$|_ID$|_MODEL$|_SCOPES$|PUBLIC_KEY$/.test(field.key)
+                                  ? "text"
+                                  : "password"
+                              }
+
                               autoComplete="off"
                               disabled={locked}
                               placeholder={

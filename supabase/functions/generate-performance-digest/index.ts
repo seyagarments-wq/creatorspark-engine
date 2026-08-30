@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getSecret } from "../_shared/secrets.ts";
+import { aiChatCompletion } from "../_shared/ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,7 +15,6 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const lovableApiKey = (await getSecret("LOVABLE_API_KEY"))!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     console.log("Generating weekly performance digest...");
@@ -212,21 +211,14 @@ Provide a concise JSON response:
   "sentiment": "positive" | "neutral" | "negative"
 }`;
 
-        const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${lovableApiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
+        const aiResponse = await aiChatCompletion({
             model: "google/gemini-2.5-flash",
             messages: [
               { role: "system", content: "You are a Meta Ads analyst. Respond with valid JSON only." },
               { role: "user", content: aiPrompt }
             ],
             temperature: 0.3,
-          }),
-        });
+          });
 
         if (aiResponse.ok) {
           const aiData = await aiResponse.json();
