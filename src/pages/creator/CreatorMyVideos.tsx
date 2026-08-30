@@ -601,6 +601,19 @@ export default function CreatorMyVideos() {
                       );
                     })()}
 
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="outline"
+                      className="mt-3 w-full"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Link to={`/creator/videos/${video.id}`}>
+                        <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
+                        View full review
+                      </Link>
+                    </Button>
+
                     {["pending", "rejected", "revision_requested"].includes(video.status) && (
                       <Button
                         size="sm"
