@@ -66,8 +66,8 @@ export default function Install() {
       {/* Header */}
       <header className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <img src={logo} alt="Creatorsctrl" className="w-10 h-10 rounded-xl" />
-          <span className="font-bold text-xl">Creatorsctrl</span>
+          <img src={logo} alt="Creators Control" className="w-10 h-10 rounded-xl" />
+          <span className="font-bold text-xl">Creators Control</span>
         </div>
         <Button variant="ghost" onClick={() => navigate("/auth")}>
           Sign In
@@ -77,10 +77,10 @@ export default function Install() {
       <main className="container max-w-lg mx-auto px-4 py-8 space-y-6">
         {/* Hero */}
         <div className="text-center space-y-4">
-          <img src={logo} alt="Creatorsctrl" className="w-24 h-24 rounded-3xl mx-auto shadow-lg shadow-primary/25" />
+          <img src={logo} alt="Creators Control" className="w-24 h-24 rounded-3xl mx-auto shadow-lg shadow-primary/25" />
           <h1 className="text-3xl font-bold">Get the App</h1>
           <p className="text-muted-foreground">
-            Install Creatorsctrl for the best experience with push notifications and quick access.
+            Install Creators Control for the best experience with push notifications and quick access.
           </p>
         </div>
 
@@ -128,7 +128,7 @@ export default function Install() {
                 <CheckCircle2 className="w-8 h-8 text-green-500" />
                 <div>
                   <p className="font-semibold text-green-500">App Installed!</p>
-                  <p className="text-sm text-muted-foreground">You're all set to use Creatorsctrl</p>
+                  <p className="text-sm text-muted-foreground">You're all set to use Creators Control</p>
                 </div>
               </div>
             </CardContent>

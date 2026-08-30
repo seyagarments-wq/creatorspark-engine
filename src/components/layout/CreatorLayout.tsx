@@ -120,9 +120,9 @@ function SidebarContent({ onNavigate, unreadCount, markChatRead, badges, markSee
       {/* Logo */}
       <div className="p-4 lg:p-6">
         <div className="flex items-center gap-3">
-          <img src={logo} alt="Creatorsctrl" width={40} height={40} className="w-10 h-10 rounded-xl shadow-glow-sm" />
+          <img src={logo} alt="Creators Control" width={40} height={40} className="w-10 h-10 rounded-xl shadow-glow-sm" />
           <div>
-            <h1 className="font-semibold text-lg">Creatorsctrl</h1>
+            <h1 className="font-semibold text-lg">Creators Control</h1>
             <p className="text-xs text-muted-foreground">Creator workspace</p>
           </div>
         </div>

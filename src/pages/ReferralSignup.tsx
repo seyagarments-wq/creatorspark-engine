@@ -211,8 +211,8 @@ export default function ReferralSignup() {
         <div className="w-full max-w-md space-y-6">
           {/* Logo */}
           <div className="flex items-center gap-3">
-            <img src={logo} alt="Creatorsctrl" className="w-10 h-10 rounded-xl" />
-            <span className="font-bold text-xl">Creatorsctrl</span>
+            <img src={logo} alt="Creators Control" className="w-10 h-10 rounded-xl" />
+            <span className="font-bold text-xl">Creators Control</span>
           </div>
 
           {/* Header */}

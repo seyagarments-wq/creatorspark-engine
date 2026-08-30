@@ -89,7 +89,7 @@ export default function Maintenance() {
     <div className="min-h-[100dvh] w-full flex items-center justify-center bg-black text-white px-4 py-8 overflow-hidden select-none">
       <div className="max-w-md w-full text-center space-y-6">
         <div className="text-xs sm:text-sm uppercase tracking-[0.3em] text-white/50">
-          Creatorsctrl
+          Creators Control
         </div>
         <h1 className="text-3xl sm:text-4xl md:text-5xl font-light">
           App is <span className="italic font-serif">down</span>

@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
         .insert({ agent_id: agent.id, status: "running" }).select("id").single();
       try {
         const ctx: Ctx = { admin, role: "admin", profileId: null, approvedActions: [] };
-        const system = `You are a scheduled operations agent for the Creatorsctrl UGC platform.
+        const system = `You are a scheduled operations agent for the Creators Control UGC platform.
 Use the tools to gather real data, then produce a concise, serious written report in markdown.
 Do not attempt destructive actions — they are not approved in scheduled runs. Keep the report under 400 words.`;
         const out = await runAgentLoop(

@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
     }
 
     const { data, error } = await resend.emails.send({
-      from: "Creatorsctrl <noreply@seyagarments.com>",
+      from: "Creators Control <noreply@seyagarments.com>",
       to,
       subject,
       html,

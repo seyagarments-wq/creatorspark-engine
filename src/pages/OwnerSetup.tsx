@@ -169,8 +169,8 @@ export default function OwnerSetup() {
 
       <div className="w-full max-w-md relative z-10 animate-fade-in">
         <div className="flex items-center justify-center gap-3 mb-8">
-          <img src={logo} alt="Creatorsctrl" className="w-12 h-12 rounded-2xl shadow-glow-md" />
-          <span className="font-semibold text-2xl text-foreground">Creatorsctrl</span>
+          <img src={logo} alt="Creators Control" className="w-12 h-12 rounded-2xl shadow-glow-md" />
+          <span className="font-semibold text-2xl text-foreground">Creators Control</span>
         </div>
 
         {/* Steps */}

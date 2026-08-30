@@ -100,7 +100,7 @@ export default function ReferralApplicationsPanel() {
       const { error } = await supabase.functions.invoke("send-referral-email", {
         body: {
           to: app.email,
-          subject: "🎉 You've been approved — Welcome to Creatorsctrl!",
+          subject: "🎉 You've been approved — Welcome to Creators Control!",
           html: `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 16px;">
               <h2 style="color:#111;">Hey ${app.full_name}, you're in! 🎉</h2>
@@ -132,14 +132,14 @@ export default function ReferralApplicationsPanel() {
       const { error } = await supabase.functions.invoke("send-referral-email", {
         body: {
           to: app.email,
-          subject: "Your Creatorsctrl application status",
+          subject: "Your Creators Control application status",
           html: `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 16px;">
               <h2 style="color:#111;">Hi ${app.full_name},</h2>
-              <p style="color:#444;">Thank you for applying to join Creatorsctrl. After reviewing your application, we're unable to move forward at this time.</p>
+              <p style="color:#444;">Thank you for applying to join Creators Control. After reviewing your application, we're unable to move forward at this time.</p>
               ${reason ? `<p style="color:#444;"><strong>Reason:</strong> ${reason}</p>` : ""}
               <p style="color:#444;">We appreciate your interest and encourage you to apply again in the future as you grow your content.</p>
-              <p style="color:#888;font-size:13px;margin-top:32px;">The Creatorsctrl Team</p>
+              <p style="color:#888;font-size:13px;margin-top:32px;">The Creators Control Team</p>
             </div>
           `,
         },

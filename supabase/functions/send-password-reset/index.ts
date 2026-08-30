@@ -67,12 +67,12 @@ serve(async (req) => {
     console.log("Generated reset link for:", email);
 
     // Send email via Resend using verified domain
-    const fromEmail = "Creatorsctrl <noreply@seyagarments.com>";
+    const fromEmail = "Creators Control <noreply@seyagarments.com>";
     
     const { error: emailError } = await resend.emails.send({
       from: fromEmail,
       to: [email],
-      subject: "Reset Your Password - Creatorsctrl",
+      subject: "Reset Your Password - Creators Control",
       html: `
         <!DOCTYPE html>
         <html>
@@ -104,7 +104,7 @@ serve(async (req) => {
               <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 24px 0;">
               
               <p style="color: #a1a1aa; font-size: 12px; text-align: center;">
-                Creatorsctrl - UGC Creator Platform
+                Creators Control - UGC Creator Platform
               </p>
             </div>
           </body>

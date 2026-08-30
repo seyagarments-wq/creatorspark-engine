@@ -18,7 +18,7 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message:', payload);
   
-  const notificationTitle = payload.notification?.title || payload.data?.title || 'Creatorsctrl';
+  const notificationTitle = payload.notification?.title || payload.data?.title || 'Creators Control';
   const notificationOptions = {
     body: payload.notification?.body || payload.data?.body || 'You have a new notification',
     icon: '/pwa-192x192.png',

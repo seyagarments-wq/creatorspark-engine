@@ -182,7 +182,7 @@ serve(async (req) => {
             message,
             notification_type: "general",
             link,
-            from_name: "Creatorsctrl",
+            from_name: "Creators Control",
           }),
         });
 
