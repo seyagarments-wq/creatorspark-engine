@@ -159,6 +159,8 @@ export default function AdminSubmissions() {
   const [trimDialogOpen, setTrimDialogOpen] = useState(false);
   const [trimVideo, setTrimVideo] = useState<Submission | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [reviewVideo, setReviewVideo] = useState<Submission | null>(null);
   const [mentorDialogOpen, setMentorDialogOpen] = useState(false);
   const [mentorDialogVideo, setMentorDialogVideo] = useState<Submission | null>(null);
   const [mentors, setMentors] = useState<MentorProfile[]>([]);
