@@ -1334,6 +1334,20 @@ export default function AdminSubmissions() {
                     </div>
                   )}
 
+                  {/* Detailed review */}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full mt-2"
+                    onClick={() => {
+                      setReviewVideo(submission);
+                      setReviewDialogOpen(true);
+                    }}
+                  >
+                    <ClipboardCheck className="w-4 h-4 mr-1" />
+                    Detailed review
+                  </Button>
+
                   {/* Actions */}
                   {submission.status === "saved_for_later" ? (
                     <div className="flex gap-2 pt-2 border-t">
