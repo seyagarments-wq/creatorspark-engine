@@ -162,6 +162,9 @@ serve(async (req) => {
         const data = await res.json();
         if (!res.ok) return json({ ok: false, message: data?.error?.message ?? `Meta responded ${res.status}.` });
         return json({ ok: true, message: `Connected as ${data?.name ?? data?.id}.` });
+      }
+
+
 
       if (service === "ai") {
         const model = get("AI_MODEL");
