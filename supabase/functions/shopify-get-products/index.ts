@@ -22,12 +22,16 @@ interface ShopifyProduct {
 
 async function getAccessToken(): Promise<string> {
   const shopDomain = Deno.env.get("SHOPIFY_STORE_DOMAIN");
+  const directToken = Deno.env.get("SHOPIFY_ACCESS_TOKEN");
+  if (directToken) return directToken;
+
   const clientId = Deno.env.get("SHOPIFY_CLIENT_ID");
   const clientSecret = Deno.env.get("SHOPIFY_CLIENT_SECRET");
 
   if (!shopDomain || !clientId || !clientSecret) {
     throw new Error("Missing Shopify credentials");
   }
+
 
   console.log("Requesting access token for shop:", shopDomain);
 
