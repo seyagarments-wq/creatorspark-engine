@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getSecret } from "../_shared/secrets.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,7 +46,9 @@ serve(async (req) => {
     }
 
     const publicKey =
-      Deno.env.get("VAPID_PUBLIC_KEY") || Deno.env.get("VITE_VAPID_PUBLIC_KEY") || "";
+      (await getSecret("VAPID_PUBLIC_KEY")) ||
+      (await getSecret("VITE_VAPID_PUBLIC_KEY")) ||
+      "";
 
     if (!publicKey) {
       return json({ error: "VAPID public key not configured" }, 500);
