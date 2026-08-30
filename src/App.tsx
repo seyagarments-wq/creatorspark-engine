@@ -125,6 +125,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/auth" element={<Landing />} />
+        <Route path="/setup" element={<OwnerSetup />} />
         <Route path="/referral-signup" element={<ReferralSignup />} />
         <Route path="/install" element={<Install />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
