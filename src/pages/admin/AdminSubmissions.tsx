@@ -60,6 +60,7 @@ import {
   ChevronLeft,
   ChevronRight,
   UserPlus,
+  ClipboardCheck,
 } from "lucide-react";
 import { formatDistanceToNow, startOfWeek, subWeeks, subDays, isAfter } from "date-fns";
 import { VideoThumbnail } from "@/components/video/VideoThumbnail";
@@ -68,6 +69,7 @@ import { CommentBubble } from "@/components/video/CommentBubble";
 import { VideoCommentThread } from "@/components/video/VideoCommentThread";
 import { VideoTrimDialog } from "@/components/admin/VideoTrimDialog";
 import { VideoCompareDialog } from "@/components/video/VideoCompareDialog";
+import { VideoReviewDialog } from "@/components/video/VideoReviewDialog";
 import { useAuth } from "@/lib/auth";
 import { StickerPicker } from "@/components/chat/StickerPicker";
 
@@ -157,6 +159,8 @@ export default function AdminSubmissions() {
   const [trimDialogOpen, setTrimDialogOpen] = useState(false);
   const [trimVideo, setTrimVideo] = useState<Submission | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [reviewVideo, setReviewVideo] = useState<Submission | null>(null);
   const [mentorDialogOpen, setMentorDialogOpen] = useState(false);
   const [mentorDialogVideo, setMentorDialogVideo] = useState<Submission | null>(null);
   const [mentors, setMentors] = useState<MentorProfile[]>([]);
@@ -1334,6 +1338,20 @@ export default function AdminSubmissions() {
                     </div>
                   )}
 
+                  {/* Detailed review */}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full mt-2"
+                    onClick={() => {
+                      setReviewVideo(submission);
+                      setReviewDialogOpen(true);
+                    }}
+                  >
+                    <ClipboardCheck className="w-4 h-4 mr-1" />
+                    Detailed review
+                  </Button>
+
                   {/* Actions */}
                   {submission.status === "saved_for_later" ? (
                     <div className="flex gap-2 pt-2 border-t">
@@ -1998,6 +2016,17 @@ export default function AdminSubmissions() {
         open={compareOpen}
         onOpenChange={setCompareOpen}
         preselectedIds={selectedIds.size === 2 ? Array.from(selectedIds) : undefined}
+      />
+
+      {/* Detailed Review Dialog */}
+      <VideoReviewDialog
+        open={reviewDialogOpen}
+        onOpenChange={setReviewDialogOpen}
+        videoId={reviewVideo?.id || null}
+        videoTitle={reviewVideo?.title}
+        videoUrl={reviewVideo?.video_url}
+        creatorName={(reviewVideo as any)?.creator_name}
+        onSaved={() => setReviewVideo(null)}
       />
 
       {/* Mentor Assignment Dialog */}

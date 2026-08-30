@@ -28,6 +28,7 @@ const DataDeletion = lazy(() => import("./pages/DataDeletion"));
 // Creator pages
 const CreatorHome = lazy(() => import("./pages/creator/CreatorHome"));
 const CreatorMyVideos = lazy(() => import("./pages/creator/CreatorMyVideos"));
+const CreatorVideoDetail = lazy(() => import("./pages/creator/CreatorVideoDetail"));
 const CreatorSubmit = lazy(() => import("./pages/creator/CreatorSubmit"));
 const CreatorPayouts = lazy(() => import("./pages/creator/CreatorPayouts"));
 const CreatorProfile = lazy(() => import("./pages/creator/CreatorProfile"));
@@ -139,6 +140,7 @@ function AppRoutes() {
         <Route path="/creator/videos" element={<ProtectedRoute requiredRole="creator"><CreatorMyVideos /></ProtectedRoute>} />
         <Route path="/creator/submit" element={<ProtectedRoute requiredRole="creator"><CreatorSubmit /></ProtectedRoute>} />
         <Route path="/creator/videos/upload" element={<ProtectedRoute requiredRole="creator"><CreatorSubmit /></ProtectedRoute>} />
+        <Route path="/creator/videos/:id" element={<ProtectedRoute requiredRole="creator"><CreatorVideoDetail /></ProtectedRoute>} />
         <Route path="/creator/payouts" element={<ProtectedRoute requiredRole="creator"><CreatorPayouts /></ProtectedRoute>} />
         <Route path="/creator/profile" element={<ProtectedRoute requiredRole="creator"><CreatorProfile /></ProtectedRoute>} />
         <Route path="/creator/brand" element={<ProtectedRoute requiredRole="creator"><CreatorBrand /></ProtectedRoute>} />
