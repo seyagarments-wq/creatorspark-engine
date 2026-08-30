@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { getSecret } from "../_shared/secrets.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -86,8 +87,8 @@ serve(async (req) => {
     logStep("Action requested", { action });
 
     // For Instagram OAuth, we need the app credentials stored securely
-    const metaAppId = Deno.env.get("META_APP_ID");
-    const metaAppSecret = Deno.env.get("META_APP_SECRET");
+    const metaAppId = (await getSecret("META_APP_ID"));
+    const metaAppSecret = (await getSecret("META_APP_SECRET"));
 
     switch (action) {
       case "check_status": {

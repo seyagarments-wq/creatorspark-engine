@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { getSecret } from "../_shared/secrets.ts";
 
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+const RESEND_API_KEY = (await getSecret("RESEND_API_KEY"));
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -88,7 +89,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Processing notification for user ${user_id}: ${title}`);
 
-    const appUrl = Deno.env.get("APP_URL") || "https://creatorsctrl.com";
+    const appUrl = (await getSecret("APP_URL")) || "https://creatorsctrl.com";
     const fullLink = link
       ? (link.startsWith("http://") || link.startsWith("https://") ? link : `${appUrl}${link}`)
       : undefined;

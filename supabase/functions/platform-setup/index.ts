@@ -1,0 +1,168 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+// Credentials an admin can manage from the in-app Setup page.
+const ALLOWED_KEYS = [
+  "SHOPIFY_STORE_DOMAIN",
+  "SHOPIFY_ACCESS_TOKEN",
+  "SHOPIFY_CLIENT_ID",
+  "SHOPIFY_CLIENT_SECRET",
+  "RESEND_API_KEY",
+  "STRIPE_SECRET_KEY",
+  "META_APP_ID",
+  "META_APP_SECRET",
+  "META_SYSTEM_USER_TOKEN",
+  "META_AD_ACCOUNT_ID",
+  "PAYPAL_CLIENT_ID",
+  "PAYPAL_CLIENT_SECRET",
+  "OPENAI_API_KEY",
+  "ANTHROPIC_API_KEY",
+  "LOVABLE_API_KEY",
+  "APP_URL",
+  "SITE_URL",
+] as const;
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
+function mask(value: string) {
+  if (value.length <= 8) return "••••";
+  return `${value.slice(0, 4)}••••${value.slice(-4)}`;
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
+  try {
+    const authHeader = req.headers.get("authorization");
+    if (!authHeader) return json({ error: "Missing authorization header" }, 401);
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) return json({ error: "Invalid token" }, 401);
+
+    const { data: roleData } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("role", "admin")
+      .maybeSingle();
+    if (!roleData) return json({ error: "Admin access required" }, 403);
+
+    const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
+    const action = body.action ?? "status";
+
+    // Values stored in the database by an admin
+    const { data: rows } = await supabase
+      .from("platform_secrets")
+      .select("key, value, updated_at");
+    const stored = new Map((rows ?? []).map((r) => [r.key as string, r]));
+
+    const buildStatus = () =>
+      ALLOWED_KEYS.map((key) => {
+        const envValue = Deno.env.get(key);
+        const row = stored.get(key);
+        const value = envValue || (row?.value as string | undefined);
+        return {
+          key,
+          configured: !!value,
+          source: envValue ? "environment" : row ? "app" : null,
+          preview: value ? mask(value) : null,
+          updated_at: row?.updated_at ?? null,
+          editable: !envValue,
+        };
+      });
+
+    if (action === "status") return json({ settings: buildStatus() });
+
+    if (action === "save") {
+      const entries: { key: string; value: string }[] = body.entries ?? [];
+      const invalid = entries.filter((e) => !ALLOWED_KEYS.includes(e.key as never));
+      if (invalid.length) return json({ error: `Unknown keys: ${invalid.map((i) => i.key).join(", ")}` }, 400);
+
+      for (const entry of entries) {
+        const value = (entry.value ?? "").trim();
+        if (!value) {
+          await supabase.from("platform_secrets").delete().eq("key", entry.key);
+          continue;
+        }
+        await supabase.from("platform_secrets").upsert(
+          { key: entry.key, value, updated_at: new Date().toISOString(), updated_by: user.id },
+          { onConflict: "key" },
+        );
+      }
+      const { data: fresh } = await supabase.from("platform_secrets").select("key, value, updated_at");
+      stored.clear();
+      for (const r of fresh ?? []) stored.set(r.key as string, r);
+      return json({ ok: true, settings: buildStatus() });
+    }
+
+    if (action === "test") {
+      const get = (key: string) => Deno.env.get(key) || (stored.get(key)?.value as string | undefined);
+      const service = body.service as string;
+
+      if (service === "shopify") {
+        const domain = get("SHOPIFY_STORE_DOMAIN");
+        const shopToken = get("SHOPIFY_ACCESS_TOKEN");
+        if (!domain || !shopToken) return json({ ok: false, message: "Store domain and Admin API token are required." });
+        const res = await fetch(`https://${domain}/admin/api/2024-01/shop.json`, {
+          headers: { "X-Shopify-Access-Token": shopToken },
+        });
+        if (!res.ok) return json({ ok: false, message: `Shopify responded ${res.status}. Check the Admin API token.` });
+        const data = await res.json();
+        return json({ ok: true, message: `Connected to ${data?.shop?.name ?? domain}.` });
+      }
+
+      if (service === "resend") {
+        const key = get("RESEND_API_KEY");
+        if (!key) return json({ ok: false, message: "Resend API key is missing." });
+        const res = await fetch("https://api.resend.com/domains", {
+          headers: { Authorization: `Bearer ${key}` },
+        });
+        if (!res.ok) return json({ ok: false, message: `Resend responded ${res.status}. Check the API key.` });
+        const data = await res.json();
+        const domains = (data?.data ?? []).map((d: { name: string }) => d.name).join(", ");
+        return json({ ok: true, message: domains ? `Connected. Sending domains: ${domains}` : "Connected. No sending domain added yet." });
+      }
+
+      if (service === "stripe") {
+        const key = get("STRIPE_SECRET_KEY");
+        if (!key) return json({ ok: false, message: "Stripe secret key is missing." });
+        const res = await fetch("https://api.stripe.com/v1/account", {
+          headers: { Authorization: `Bearer ${key}` },
+        });
+        if (!res.ok) return json({ ok: false, message: `Stripe responded ${res.status}. Check the secret key.` });
+        const data = await res.json();
+        return json({ ok: true, message: `Connected to ${data?.business_profile?.name || data?.id}.` });
+      }
+
+      if (service === "meta") {
+        const metaToken = get("META_SYSTEM_USER_TOKEN");
+        if (!metaToken) return json({ ok: false, message: "Meta system-user token is missing." });
+        const res = await fetch(`https://graph.facebook.com/v19.0/me?access_token=${encodeURIComponent(metaToken)}`);
+        const data = await res.json();
+        if (!res.ok) return json({ ok: false, message: data?.error?.message ?? `Meta responded ${res.status}.` });
+        return json({ ok: true, message: `Connected as ${data?.name ?? data?.id}.` });
+      }
+
+      return json({ error: "Unknown service" }, 400);
+    }
+
+    return json({ error: "Unknown action" }, 400);
+  } catch (error) {
+    console.error("platform-setup error", error);
+    return json({ error: error instanceof Error ? error.message : "Unexpected error" }, 500);
+  }
+});

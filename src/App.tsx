@@ -60,6 +60,7 @@ const AdminRewards = lazy(() => import("./pages/admin/AdminRewards"));
 const AdminPayouts = lazy(() => import("./pages/admin/AdminPayouts"));
 const AdminChat = lazy(() => import("./pages/admin/AdminChat"));
 const AdminSettings = lazy(() => import("./pages/admin/AdminSettings"));
+const AdminSetup = lazy(() => import("./pages/admin/AdminSetup"));
 const AdminSamples = lazy(() => import("./pages/admin/AdminSamples"));
 const AdminMetaIntelligence = lazy(() => import("./pages/admin/AdminMetaIntelligence"));
 const AdminBriefs = lazy(() => import("./pages/admin/AdminBriefs"));
@@ -171,6 +172,7 @@ function AppRoutes() {
         <Route path="/admin/payouts" element={<ProtectedRoute requiredRole="admin"><AdminPayouts /></ProtectedRoute>} />
         <Route path="/admin/chat" element={<ProtectedRoute requiredRole="admin"><AdminChat /></ProtectedRoute>} />
         <Route path="/admin/settings" element={<ProtectedRoute requiredRole="admin"><AdminSettings /></ProtectedRoute>} />
+        <Route path="/admin/setup" element={<ProtectedRoute requiredRole="admin"><AdminSetup /></ProtectedRoute>} />
         <Route path="/admin/brand" element={<ProtectedRoute requiredRole="admin"><AdminBrand /></ProtectedRoute>} />
         <Route path="/admin/meta-intelligence" element={<ProtectedRoute requiredRole="admin"><AdminMetaIntelligence /></ProtectedRoute>} />
         <Route path="/admin/creators/:id" element={<ProtectedRoute requiredRole="admin"><AdminCreatorProfile /></ProtectedRoute>} />

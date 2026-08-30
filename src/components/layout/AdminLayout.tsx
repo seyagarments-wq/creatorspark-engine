@@ -21,6 +21,7 @@ import {
   Radar,
   MessageCircle,
   SlidersHorizontal,
+  PlugZap,
   LogOut,
   Search,
   Bell,
@@ -92,6 +93,7 @@ const adminNavSections: NavSection[] = [
       { icon: SwatchBook, label: "Brand", href: "/admin/brand" },
       { icon: Library, label: "Resources", href: "/admin/resources" },
       { icon: SlidersHorizontal, label: "Settings", href: "/admin/settings" },
+      { icon: PlugZap, label: "Setup", href: "/admin/setup" },
     ],
   },
 ];

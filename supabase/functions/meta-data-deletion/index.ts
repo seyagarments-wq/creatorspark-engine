@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { getSecret } from "../_shared/secrets.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -76,7 +77,7 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const siteUrl = Deno.env.get("SITE_URL") || "https://creatorsctrl.com";
+    const siteUrl = (await getSecret("SITE_URL")) || "https://creatorsctrl.com";
 
     // Parse the request body - Facebook sends form-encoded data
     let signedRequest: string | null = null;
@@ -210,7 +211,7 @@ serve(async (req) => {
     // Generate a confirmation code even for errors
     // Facebook requires this response format
     const errorConfirmationCode = crypto.randomUUID();
-    const siteUrl = Deno.env.get("SITE_URL") || "https://creatorsctrl.com";
+    const siteUrl = (await getSecret("SITE_URL")) || "https://creatorsctrl.com";
     
     return new Response(
       JSON.stringify({

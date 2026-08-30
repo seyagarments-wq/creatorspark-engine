@@ -56,3 +56,14 @@ Stripe/Resend where callbacks are configured.
 - `lovable-tagger` in `vite.config.ts` — dev-mode only, stripped from production builds.
 - `src/integrations/supabase/previewAuthStorage.ts` — falls back to plain `localStorage`
   on any non-Lovable host, so it is a no-op on your domain.
+
+## Admin self-service setup
+
+After deploying, sign in as an admin and open **Admin → Setup** (`/admin/setup`).
+Every third-party credential (Shopify, Resend, Stripe, Meta, PayPal, AI keys, app URL)
+can be entered there with step-by-step instructions and a "Test connection" button.
+
+Values are stored in the `platform_secrets` table (service-role only, no client read access)
+and resolved by edge functions via `supabase/functions/_shared/secrets.ts`:
+environment variable first, then the admin-saved value. So you can either set
+Supabase Edge Function secrets yourself, or let the admin do it in the app — both work.

@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "npm:resend@2.0.0";
+import { getSecret } from "../_shared/secrets.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,7 +18,7 @@ const REMINDER_SLOTS = [
   { key: 100, minHours: 240, label: "Day 10" },
 ];
 
-const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
+const resend = new Resend((await getSecret("RESEND_API_KEY")));
 
 function getDay1Email(name: string): { subject: string; html: string } {
   return {

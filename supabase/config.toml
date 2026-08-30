@@ -140,3 +140,6 @@ verify_jwt = false
 
 [functions.pay-paypal-commission]
 verify_jwt = false
+
+[functions.platform-setup]
+verify_jwt = false

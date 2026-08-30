@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { getSecret } from "../_shared/secrets.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,12 +22,12 @@ interface ShopifyProduct {
 }
 
 async function getAccessToken(): Promise<string> {
-  const shopDomain = Deno.env.get("SHOPIFY_STORE_DOMAIN");
-  const directToken = Deno.env.get("SHOPIFY_ACCESS_TOKEN");
+  const shopDomain = (await getSecret("SHOPIFY_STORE_DOMAIN"));
+  const directToken = (await getSecret("SHOPIFY_ACCESS_TOKEN"));
   if (directToken) return directToken;
 
-  const clientId = Deno.env.get("SHOPIFY_CLIENT_ID");
-  const clientSecret = Deno.env.get("SHOPIFY_CLIENT_SECRET");
+  const clientId = (await getSecret("SHOPIFY_CLIENT_ID"));
+  const clientSecret = (await getSecret("SHOPIFY_CLIENT_SECRET"));
 
   if (!shopDomain || !clientId || !clientSecret) {
     throw new Error("Missing Shopify credentials");
@@ -66,7 +67,7 @@ serve(async (req) => {
   }
 
   try {
-    const shopDomain = Deno.env.get("SHOPIFY_STORE_DOMAIN");
+    const shopDomain = (await getSecret("SHOPIFY_STORE_DOMAIN"));
     if (!shopDomain) {
       throw new Error("SHOPIFY_STORE_DOMAIN not configured");
     }
