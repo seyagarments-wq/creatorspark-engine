@@ -1,0 +1,1 @@
+ALTER TABLE public.sample_requests ADD COLUMN IF NOT EXISTS rejection_reason text;

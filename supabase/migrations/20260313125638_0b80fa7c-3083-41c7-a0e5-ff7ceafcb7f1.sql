@@ -1,0 +1,1 @@
+ALTER TABLE public.weekly_challenges ADD COLUMN cohort_id uuid REFERENCES public.creator_cohorts(id) ON DELETE SET NULL DEFAULT NULL;

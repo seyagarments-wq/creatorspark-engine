@@ -1,0 +1,1 @@
+ALTER TYPE video_status ADD VALUE 'saved_for_later';

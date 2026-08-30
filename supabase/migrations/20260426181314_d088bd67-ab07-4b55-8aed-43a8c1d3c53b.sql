@@ -1,0 +1,2 @@
+ALTER TABLE public.sample_requests DROP CONSTRAINT IF EXISTS sample_requests_status_check;
+ALTER TABLE public.sample_requests ADD CONSTRAINT sample_requests_status_check CHECK (status = ANY (ARRAY['requested'::text, 'approved'::text, 'rejected'::text, 'shipped'::text, 'delivered'::text, 'cancelled'::text]));
