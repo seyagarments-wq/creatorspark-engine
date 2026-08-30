@@ -198,6 +198,8 @@ serve(async (req) => {
       await supabase.from("brands").insert(brandPayload);
     }
 
+    await sendWelcomeEmail(email, fullName, brandName);
+
     return json({ success: true, user_id: userId });
   } catch (error) {
     console.error("owner-bootstrap error", error);
