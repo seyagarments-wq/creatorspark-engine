@@ -143,3 +143,6 @@ verify_jwt = false
 
 [functions.platform-setup]
 verify_jwt = false
+
+[functions.owner-bootstrap]
+verify_jwt = false
