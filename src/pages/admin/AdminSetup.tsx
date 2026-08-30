@@ -375,7 +375,12 @@ export default function AdminSetup() {
                             </Label>
                             <Input
                               id={field.key}
-                              type={field.key.includes("DOMAIN") || field.key.endsWith("URL") || field.key.endsWith("_ID") ? "text" : "password"}
+                              type={
+                                /DOMAIN|URL$|_ID$|_MODEL$|_SCOPES$|PUBLIC_KEY$/.test(field.key)
+                                  ? "text"
+                                  : "password"
+                              }
+
                               autoComplete="off"
                               disabled={locked}
                               placeholder={
