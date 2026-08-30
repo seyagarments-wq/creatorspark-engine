@@ -52,12 +52,16 @@ const INTEGRATIONS: Integration[] = [
       "Enable read_products, write_orders, read_orders, read_customers and write_customers, then save.",
       "Open the API credentials tab and click Install app, then reveal the Admin API access token (starts with shpat_).",
       "Paste your store domain and that token below and press Save, then Test connection.",
+      "The Client ID / Client secret fields are only needed if you use Shopify OAuth instead of the Admin token — leave them blank otherwise.",
     ],
     fields: [
       { key: "SHOPIFY_STORE_DOMAIN", label: "Store domain", placeholder: "your-store.myshopify.com" },
       { key: "SHOPIFY_ACCESS_TOKEN", label: "Admin API access token", placeholder: "shpat_..." },
+      { key: "SHOPIFY_CLIENT_ID", label: "Client ID", optional: true },
+      { key: "SHOPIFY_CLIENT_SECRET", label: "Client secret", optional: true },
     ],
   },
+
   {
     id: "resend",
     name: "Resend (email)",
