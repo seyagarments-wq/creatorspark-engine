@@ -162,9 +162,86 @@ serve(async (req) => {
         const data = await res.json();
         if (!res.ok) return json({ ok: false, message: data?.error?.message ?? `Meta responded ${res.status}.` });
         return json({ ok: true, message: `Connected as ${data?.name ?? data?.id}.` });
+
+      if (service === "ai") {
+        const model = get("AI_MODEL");
+        const openai = get("OPENAI_API_KEY");
+        const lovable = get("LOVABLE_API_KEY");
+        const anthropic = get("ANTHROPIC_API_KEY");
+
+        if (openai) {
+          const res = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${openai}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: model || "gpt-4o-mini",
+              messages: [{ role: "user", content: "Reply with the word ok." }],
+            }),
+          });
+          if (!res.ok) {
+            const detail = await res.text();
+            return json({ ok: false, message: `OpenAI responded ${res.status}. ${detail.slice(0, 160)}` });
+          }
+          return json({ ok: true, message: `AI is live via OpenAI (${model || "gpt-4o-mini"}).` });
+        }
+
+        if (lovable) {
+          const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${lovable}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: model || "openai/gpt-5.6-sol",
+              messages: [{ role: "user", content: "Reply with the word ok." }],
+            }),
+          });
+          if (!res.ok) {
+            const detail = await res.text();
+            return json({ ok: false, message: `AI gateway responded ${res.status}. ${detail.slice(0, 160)}` });
+          }
+          return json({ ok: true, message: `AI is live via the Lovable gateway (${model || "openai/gpt-5.6-sol"}).` });
+        }
+
+        if (anthropic) {
+          const res = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "x-api-key": anthropic,
+              "anthropic-version": "2023-06-01",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: model || "claude-sonnet-4-20250514",
+              max_tokens: 16,
+              messages: [{ role: "user", content: "Reply with the word ok." }],
+            }),
+          });
+          if (!res.ok) {
+            const detail = await res.text();
+            return json({ ok: false, message: `Anthropic responded ${res.status}. ${detail.slice(0, 160)}` });
+          }
+          return json({
+            ok: true,
+            message: `AI is live via Anthropic (${model || "claude-sonnet-4-20250514"}). Note: the AI assistant/agents need an OpenAI key.`,
+          });
+        }
+
+        return json({ ok: false, message: "Add an OpenAI, Lovable or Anthropic key first." });
+      }
+
+      if (service === "push") {
+        const publicKey = get("VAPID_PUBLIC_KEY");
+        if (!publicKey) return json({ ok: false, message: "VAPID public key is missing." });
+        if (!get("VAPID_PRIVATE_KEY")) {
+          return json({ ok: false, message: "VAPID public key saved, but the private key is missing." });
+        }
+        if (publicKey.length < 80) {
+          return json({ ok: false, message: "That does not look like a VAPID public key (should be ~87 characters)." });
+        }
+        return json({ ok: true, message: "Push keys look valid." });
       }
 
       return json({ error: "Unknown service" }, 400);
+
     }
 
     return json({ error: "Unknown action" }, 400);
