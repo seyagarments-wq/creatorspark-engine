@@ -89,6 +89,17 @@ export default function Landing() {
     };
   }, []);
 
+  // First-run detection: if the platform has no admin yet, show setup on the admin tab
+  useEffect(() => {
+    if (inviteToken) return;
+    supabase.functions
+      .invoke("owner-bootstrap", { body: { action: "status" } })
+      .then(({ data }) => setNeedsSetup(!!data?.needsSetup))
+      .catch(() => setNeedsSetup(false));
+  }, [inviteToken]);
+
+
+
 
   useEffect(() => {
     if (inviteToken) {
