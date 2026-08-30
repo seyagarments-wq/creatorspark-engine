@@ -1,0 +1,1 @@
+ALTER TABLE public.referral_applications ADD COLUMN IF NOT EXISTS phone_number text;

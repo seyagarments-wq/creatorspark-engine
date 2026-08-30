@@ -1,0 +1,1 @@
+ALTER TABLE public.videos ADD COLUMN challenge_id uuid REFERENCES public.weekly_challenges(id) ON DELETE SET NULL DEFAULT NULL;

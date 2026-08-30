@@ -1,0 +1,1 @@
+ALTER TABLE public.photo_submissions ADD COLUMN IF NOT EXISTS creative_name text;

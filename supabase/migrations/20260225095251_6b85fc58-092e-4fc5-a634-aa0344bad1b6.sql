@@ -1,0 +1,1 @@
+ALTER TABLE public.ad_insights ADD COLUMN campaign_id text;

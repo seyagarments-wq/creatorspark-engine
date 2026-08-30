@@ -1,0 +1,1 @@
+ALTER TABLE public.bounties ADD COLUMN xp_reward integer DEFAULT 0;

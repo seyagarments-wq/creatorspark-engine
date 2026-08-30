@@ -1,0 +1,1 @@
+ALTER TABLE public.videos ADD COLUMN IF NOT EXISTS admin_feedback_stickers text[] DEFAULT NULL;

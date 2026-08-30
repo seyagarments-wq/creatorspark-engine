@@ -1,0 +1,151 @@
+project_id = "mhrvfmlzeabkxnodxcve"
+
+[functions.create-connect-account]
+verify_jwt = false
+
+[functions.check-connect-status]
+verify_jwt = false
+
+[functions.stripe-express-dashboard]
+verify_jwt = false
+
+[functions.process-payout]
+verify_jwt = false
+
+[functions.process-bulk-payouts]
+verify_jwt = false
+
+[functions.calculate-monthly-payouts]
+verify_jwt = false
+
+[functions.process-weekly-commissions]
+verify_jwt = false
+
+[functions.instagram-oauth]
+verify_jwt = false
+
+[functions.meta-upload-video]
+verify_jwt = false
+
+[functions.meta-sync-performance]
+verify_jwt = false
+
+[functions.fetch-meta-ads]
+verify_jwt = false
+
+[functions.send-notification-email]
+verify_jwt = false
+
+[functions.generate-brief]
+verify_jwt = false
+
+[functions.analyze-video-hook]
+verify_jwt = false
+
+[functions.generate-performance-digest]
+verify_jwt = false
+
+[functions.bulk-export-meta]
+verify_jwt = false
+
+[functions.analyze-creative-patterns]
+verify_jwt = false
+
+[functions.admin-reset-platform]
+verify_jwt = false
+
+[functions.shopify-get-products]
+verify_jwt = false
+
+[functions.shopify-create-sample-order]
+verify_jwt = false
+
+[functions.get-vapid-public-key]
+verify_jwt = false
+
+[functions.send-push-notification]
+verify_jwt = false
+
+[functions.send-password-reset]
+verify_jwt = false
+
+[functions.send-invite-email]
+verify_jwt = false
+
+[functions.check-bounty-qualifications]
+verify_jwt = false
+
+[functions.fetch-ad-insights]
+verify_jwt = false
+
+[functions.validate-meta-token]
+verify_jwt = false
+
+[functions.sync-ad-insights-daily]
+verify_jwt = false
+
+[functions.facebook-oauth]
+verify_jwt = false
+
+[functions.facebook-deauthorize]
+verify_jwt = false
+
+[functions.meta-data-deletion]
+verify_jwt = false
+
+[functions.send-weekly-reminders]
+verify_jwt = false
+
+[functions.broadcast-peer-notification]
+verify_jwt = false
+
+[functions.send-daily-digest]
+verify_jwt = false
+
+[functions.video-lookup]
+verify_jwt = false
+
+[functions.pay-accrued-commission]
+verify_jwt = false
+
+[functions.notify-chat-message]
+verify_jwt = false
+
+[functions.send-weekly-digest]
+verify_jwt = false
+
+[functions.send-referral-email]
+verify_jwt = false
+
+[functions.send-onboarding-reminders]
+verify_jwt = false
+
+[functions.launch-meta-ads]
+verify_jwt = false
+
+[functions.check-launch-status]
+verify_jwt = false
+
+[functions.creator-removal-notify]
+verify_jwt = false
+
+[functions.notify-mentor-creator-assignment]
+verify_jwt = false
+
+[functions.notify-mentor-video-status]
+verify_jwt = false
+
+[functions.send-mentor-feedback]
+verify_jwt = false
+
+[functions.notify-mentor-new-upload]
+verify_jwt = false
+
+[functions.manage-meta-ads]
+verify_jwt = false
+
+[functions.ads-ai-command]
+verify_jwt = false
+
+[functions.pay-paypal-commission]
+verify_jwt = false

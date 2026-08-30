@@ -1,0 +1,1 @@
+ALTER TABLE public.videos ADD COLUMN admin_feedback TEXT;
