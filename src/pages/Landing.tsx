@@ -158,18 +158,19 @@ export default function Landing() {
   async function validateInvite(token: string) {
     setValidatingInvite(true);
     try {
-      const { data, error } = await supabase
-        .rpc("validate_invite", { _token: token })
-        .maybeSingle();
+      // Plain array read rather than maybeSingle(): an unknown token returns zero rows, and
+      // the object-shaped Accept header turns that into a 406 in the browser console.
+      const { data, error } = await supabase.rpc("validate_invite", { _token: token });
+      const row = data?.[0];
 
-      if (error || !data) {
+      if (error || !row) {
         setInviteError("This invite link is invalid or has expired.");
         return;
       }
 
-      setInviteData(data as InviteData);
-      setEmail(data.email);
-      setActiveTab(data.role);
+      setInviteData(row as InviteData);
+      setEmail(row.email);
+      setActiveTab(row.role);
     } catch {
       setInviteError("Failed to validate invite link.");
     } finally {
