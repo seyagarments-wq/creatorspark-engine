@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import { ThemeProvider } from "@/lib/theme";
 import { PWAUpdatePrompt } from "@/components/PWAUpdatePrompt";
 import { AgreementGate } from "@/components/AgreementGate";
+import { Button } from "@/components/ui/button";
 import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
 import Maintenance from "./pages/Maintenance";
@@ -99,8 +100,32 @@ function RouteLoader() {
   );
 }
 
+// A logged-in user with no row in user_roles. This happens to accounts the old client-side
+// signup created without ever writing a profile or role. Before this screen existed the route
+// redirected /creator to /creator and rendered nothing.
+function AccountNotReady({ email, onSignOut }: { email?: string; onSignOut: () => Promise<void> }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-6">
+      <div className="max-w-md w-full text-center bg-card border border-border/50 rounded-2xl p-8 shadow-2xl">
+        <h1 className="text-xl font-semibold mb-2">Your account isn't set up yet</h1>
+        <p className="text-sm text-muted-foreground mb-6">
+          {email ? (
+            <>The login for <strong>{email}</strong> exists, but setup never finished. </>
+          ) : (
+            <>This login exists, but setup never finished. </>
+          )}
+          Ask your admin for a new invite link, open it, and finish signing up from there.
+        </p>
+        <Button variant="outline" onClick={() => void onSignOut()}>
+          Sign out
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function ProtectedRoute({ children, requiredRole }: { children: React.ReactNode; requiredRole?: "admin" | "creator" }) {
-  const { user, role, loading } = useAuth();
+  const { user, role, loading, signOut } = useAuth();
 
   if (loading) {
     return <RouteLoader />;
@@ -110,11 +135,12 @@ function ProtectedRoute({ children, requiredRole }: { children: React.ReactNode;
     return <Navigate to="/auth" replace />;
   }
 
+  if (!role) {
+    return <AccountNotReady email={user.email} onSignOut={signOut} />;
+  }
+
   if (requiredRole && role !== requiredRole) {
-    if (role === "admin") {
-      return <Navigate to="/admin" replace />;
-    }
-    return <Navigate to="/creator" replace />;
+    return <Navigate to={role === "admin" ? "/admin" : "/creator"} replace />;
   }
 
   return <>{children}</>;

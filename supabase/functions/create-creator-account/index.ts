@@ -108,6 +108,11 @@ serve(async (req) => {
       console.error("Reset link error:", resetError);
     }
 
+    // The recovery link is how the creator sets their first password. Without it in the email
+    // the only way in was "Forgot password".
+    const appUrl = origin.replace(/\/$/, "");
+    const setPasswordLink = resetData?.properties?.action_link ?? `${appUrl}/forgot-password`;
+
     // Send welcome onboarding email
     if (resendApiKey) {
       const resend = new Resend(resendApiKey);
@@ -122,13 +127,13 @@ serve(async (req) => {
             <p style="color:#444;">Congrats again on being approved to join <strong>Creators Control</strong>! We're excited to have you.</p>
             <p style="color:#444;">To start earning, you'll need to complete a few quick steps:</p>
             <ol style="color:#444; line-height:1.8;">
-              <li><strong>Create your account</strong> — Sign in at <a href="https://creatorsctrl.com/auth" style="color:#6366f1;">creatorsctrl.com</a></li>
+              <li><strong>Set your password</strong> — <a href="${setPasswordLink}" style="color:#6366f1;">click here to choose your password</a>. The link lasts 1 hour; after that use "Forgot password" at <a href="${appUrl}/auth" style="color:#6366f1;">${appUrl.replace(/^https?:\/\//, "")}</a></li>
               <li><strong>Connect Stripe</strong> — So we can send you payouts</li>
               <li><strong>Request your free sample</strong> — Get the product shipped to you</li>
               <li><strong>Submit your first video</strong> — Start earning commissions!</li>
             </ol>
             <p style="margin-top:24px;">
-              <a href="https://creatorsctrl.com/auth" style="background:#6366f1;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600;">Get Started Now</a>
+              <a href="${setPasswordLink}" style="background:#6366f1;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600;">Set your password &amp; get started</a>
             </p>
             <p style="color:#888;font-size:13px;margin-top:32px;">Questions? Text our founder Kohl directly at <strong>(425) 588-1480</strong> — he's happy to help!</p>
           </div>
