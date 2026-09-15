@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Zap, Loader2, Users, Shield } from "lucide-react";
+import { Loader2, Users, Shield } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { z } from "zod";
 
@@ -19,9 +20,24 @@ const authSchema = z.object({
 interface InviteData {
   id: string;
   email: string;
-  token: string;
   role: "admin" | "creator";
   expires_at: string;
+  brand_id: string | null;
+}
+
+// Pull the human-readable message and code out of a failed edge function call.
+async function readFunctionError(error: unknown): Promise<{ message: string; code: string | null }> {
+  const fallback = { message: "Something went wrong. Please try again.", code: null };
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const body = await error.context.json();
+      return { message: body?.error || fallback.message, code: body?.code ?? null };
+    } catch {
+      return fallback;
+    }
+  }
+  if (error instanceof Error && error.message) return { message: error.message, code: null };
+  return fallback;
 }
 
 export default function Landing() {
@@ -38,8 +54,8 @@ export default function Landing() {
   const [fullName, setFullName] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [needsSetup, setNeedsSetup] = useState(false);
-  
-  
+
+
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -54,13 +70,32 @@ export default function Landing() {
     };
   }, []);
 
+  // Supabase sends expired or already-used email links back here with
+  // #error=access_denied&error_code=otp_expired&error_description=... Say so instead of
+  // dropping the person on the login form with no explanation.
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (!hash || !hash.includes("error")) return;
+    const params = new URLSearchParams(hash.replace(/^#/, ""));
+    const code = params.get("error_code");
+    const description = params.get("error_description");
+    if (!params.get("error") && !code) return;
+    toast({
+      title: code === "otp_expired" ? "That link has expired" : "That link didn't work",
+      description: description || "Sign in with your password, or use Forgot password to get a fresh link.",
+      variant: "destructive",
+    });
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  }, [toast]);
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        if (event === 'SIGNED_IN' && session) {
+        // On the invite path handleSubmit does the redirect itself after provisioning.
+        if (event === 'SIGNED_IN' && session && !inviteToken) {
           redirectBasedOnRole(session.user.id);
         }
-        if (event === 'SIGNED_OUT') {
+        if (event === 'SIGNED_OUT' && !inviteToken) {
           setEmail("");
           setPassword("");
           setFullName("");
@@ -70,15 +105,25 @@ export default function Landing() {
 
     const timer = setTimeout(async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const { data: { user }, error } = await supabase.auth.getUser();
-        if (user && !error) {
-          redirectBasedOnRole(user.id);
-        } else {
-          try {
-            await supabase.auth.signOut();
-          } catch {
-          }
+      if (!session) return;
+      if (inviteToken) {
+        // An invite link is a fresh start. Drop any leftover session on this device so the
+        // invited person signs up as themselves rather than landing in someone else's account.
+        try {
+          await supabase.auth.signOut({ scope: 'local' });
+        } catch {
+          // already gone
+        }
+        return;
+      }
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (user && !error) {
+        redirectBasedOnRole(user.id);
+      } else {
+        try {
+          await supabase.auth.signOut();
+        } catch {
+          // already gone
         }
       }
     }, 100);
@@ -87,7 +132,7 @@ export default function Landing() {
       subscription.unsubscribe();
       clearTimeout(timer);
     };
-  }, []);
+  }, [inviteToken]);
 
   // First-run detection: if the platform has no admin yet, show setup on the admin tab
   useEffect(() => {
@@ -108,26 +153,25 @@ export default function Landing() {
   }, [inviteToken]);
 
 
+  // Token-scoped RPC. The browser no longer reads public.invites directly, so one invite
+  // token can no longer be used to list every other pending invite.
   async function validateInvite(token: string) {
     setValidatingInvite(true);
     try {
-      const { data, error } = await supabase
-        .from("invites")
-        .select("*")
-        .eq("token", token)
-        .is("used_at", null)
-        .gt("expires_at", new Date().toISOString())
-        .single();
+      // Plain array read rather than maybeSingle(): an unknown token returns zero rows, and
+      // the object-shaped Accept header turns that into a 406 in the browser console.
+      const { data, error } = await supabase.rpc("validate_invite", { _token: token });
+      const row = data?.[0];
 
-      if (error || !data) {
+      if (error || !row) {
         setInviteError("This invite link is invalid or has expired.");
         return;
       }
 
-      setInviteData(data as InviteData);
-      setEmail(data.email);
-      setActiveTab(data.role);
-    } catch (error) {
+      setInviteData(row as InviteData);
+      setEmail(row.email);
+      setActiveTab(row.role);
+    } catch {
       setInviteError("Failed to validate invite link.");
     } finally {
       setValidatingInvite(false);
@@ -173,7 +217,7 @@ export default function Landing() {
       }
 
       if (isSignUp) {
-        if (!inviteData) {
+        if (!inviteData || !inviteToken) {
           toast({
             title: "Invite required",
             description: "You need an invite link to sign up for this platform.",
@@ -183,66 +227,50 @@ export default function Landing() {
           return;
         }
 
-        const redirectUrl = `${window.location.origin}/`;
-        const { data, error } = await supabase.auth.signUp({
-          email: inviteData.email,
-          password,
-          options: {
-            emailRedirectTo: redirectUrl,
-          },
+        // Provision server-side. The function creates the auth user already confirmed, writes
+        // the profile, role and brand assignment, and marks the invite used. Nothing here
+        // depends on the browser being authenticated, which is what broke the old flow.
+        const { error: acceptError } = await supabase.functions.invoke("accept-invite", {
+          body: { token: inviteToken, password, full_name: fullName.trim() },
         });
 
-        if (error) {
-          if (error.message.includes("already registered")) {
-            toast({
-              title: "Account exists",
-              description: "This email is already registered. Please sign in instead.",
-              variant: "destructive",
-            });
+        if (acceptError) {
+          const { message, code } = await readFunctionError(acceptError);
+          if (code === "account_exists") {
+            toast({ title: "Account exists", description: message, variant: "destructive" });
             setIsSignUp(false);
+          } else if (code === "invalid_invite") {
+            setInviteError(message);
+          } else if (code === "weak_password") {
+            setErrors({ password: message });
           } else {
-            throw error;
+            toast({ title: "Couldn't create your account", description: message, variant: "destructive" });
           }
           setIsLoading(false);
           return;
         }
 
-        if (data.user) {
-          const { error: profileError } = await supabase.from("profiles").insert({
-            user_id: data.user.id,
-            full_name: fullName,
-            email: inviteData.email,
-          });
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email: inviteData.email,
+          password,
+        });
 
-          if (profileError) {
-            console.error("Profile creation error:", profileError);
-          }
-
-          const { error: roleError } = await supabase.from("user_roles").insert({
-            user_id: data.user.id,
-            role: inviteData.role,
-          });
-
-          if (roleError) {
-            console.error("Role assignment error:", roleError);
-          }
-
-          await supabase
-            .from("invites")
-            .update({ used_at: new Date().toISOString() })
-            .eq("id", inviteData.id);
-
+        if (signInError || !data.user) {
           toast({
-            title: "Account created!",
-            description: "Welcome! Redirecting to your dashboard...",
+            title: "Account created",
+            description: "Your account is ready. Sign in with the password you just chose.",
           });
-
-          if (inviteData.role === "admin") {
-            navigate("/admin");
-          } else {
-            navigate("/creator");
-          }
+          setIsSignUp(false);
+          setIsLoading(false);
+          return;
         }
+
+        toast({
+          title: "Account created!",
+          description: "Welcome! Redirecting to your dashboard...",
+        });
+
+        await redirectBasedOnRole(data.user.id);
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
@@ -250,7 +278,23 @@ export default function Landing() {
         });
 
         if (error) {
-          if (error.message.includes("Invalid login credentials")) {
+          if (error.code === "email_not_confirmed" || error.message.includes("Email not confirmed")) {
+            // Only legacy accounts can hit this now; new signups are created confirmed.
+            try {
+              await supabase.auth.resend({
+                type: "signup",
+                email,
+                options: { emailRedirectTo: `${window.location.origin}/` },
+              });
+            } catch {
+              // rate limited or already confirmed; the message below still applies
+            }
+            toast({
+              title: "Confirm your email first",
+              description: "We just sent you a fresh confirmation link. Open it, then sign in again. Or use Forgot password below.",
+              variant: "destructive",
+            });
+          } else if (error.code === "invalid_credentials" || error.message.includes("Invalid login credentials")) {
             toast({
               title: "Invalid credentials",
               description: "Please check your email and password and try again.",
@@ -267,11 +311,11 @@ export default function Landing() {
           await redirectBasedOnRole(data.user.id);
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Auth error:", error);
       toast({
         title: "Error",
-        description: error.message || "An unexpected error occurred",
+        description: error instanceof Error && error.message ? error.message : "An unexpected error occurred",
         variant: "destructive",
       });
     } finally {

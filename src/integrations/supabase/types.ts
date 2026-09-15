@@ -3444,6 +3444,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      auth_user_id_for_email: { Args: { _email: string }; Returns: string }
       calculate_level: { Args: { xp: number }; Returns: number }
       get_my_cohort_ids: { Args: never; Returns: string[] }
       get_my_profile_id: { Args: never; Returns: string }
@@ -3488,6 +3489,16 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      validate_invite: {
+        Args: { _token: string }
+        Returns: {
+          brand_id: string | null
+          email: string
+          expires_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+        }[]
       }
       xp_for_level: { Args: { level: number }; Returns: number }
     }

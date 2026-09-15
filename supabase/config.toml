@@ -146,3 +146,6 @@ verify_jwt = false
 
 [functions.owner-bootstrap]
 verify_jwt = false
+
+[functions.accept-invite]
+verify_jwt = false
