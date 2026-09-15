@@ -78,6 +78,14 @@ export default function InviteCreatorDialog({
     return window.location.origin;
   }
 
+  async function sendInviteEmail(to: string, brandName: string, link: string): Promise<boolean> {
+    const { error } = await supabase.functions.invoke("send-invite-email", {
+      body: { email: to, brand_name: brandName, invite_link: link },
+    });
+    if (error) console.error("Failed to send invite email:", error);
+    return !error;
+  }
+
   async function handleSendInvite() {
     if (!email.trim()) {
       toast({
@@ -99,34 +107,49 @@ export default function InviteCreatorDialog({
 
     setLoading(true);
     try {
-      // Check if email already has an active invite
-      const { data: existingInvite } = await supabase
+      const normalizedEmail = email.trim().toLowerCase();
+      const selectedBrand = brands.find((b) => b.id === selectedBrandId);
+      const brandName = selectedBrand?.name || "Creators Control";
+
+      // Does this email already have a live invite? If so, re-send that link rather than
+      // minting a second token. Before this, the existing-invite branch returned without
+      // sending anything, so inviting someone a second time never reached their inbox.
+      const { data: existingRows } = await supabase
         .from("invites")
-        .select("*")
-        .eq("email", email.toLowerCase())
+        .select("token")
+        .eq("email", normalizedEmail)
         .is("used_at", null)
         .gt("expires_at", new Date().toISOString())
-        .single();
+        .limit(1);
+      const existingInvite = existingRows?.[0];
 
       if (existingInvite) {
-        // Show existing invite link
         const link = `${getBaseUrl()}/auth?invite=${existingInvite.token}`;
         setInviteLink(link);
-        toast({
-          title: "Invite already exists",
-          description: "This email already has an active invite. You can share the link below.",
-        });
+        const sent = await sendInviteEmail(normalizedEmail, brandName, link);
+        toast(
+          sent
+            ? {
+                title: "Invite email re-sent",
+                description: `${normalizedEmail} already had an active invite. We emailed them the same link again.`,
+              }
+            : {
+                title: "Invite already exists",
+                description: "This email already has an active invite, but the email failed to send. Share the link below.",
+                variant: "destructive",
+              },
+        );
+        onInviteSent?.();
         return;
       }
 
       // Get current user's ID for invited_by tracking
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Create new invite with brand_id and invited_by
       const { data: invite, error } = await supabase
         .from("invites")
         .insert({
-          email: email.toLowerCase(),
+          email: normalizedEmail,
           role: "creator",
           brand_id: selectedBrandId,
           invited_by: user?.id || null,
@@ -139,37 +162,26 @@ export default function InviteCreatorDialog({
       const link = `${getBaseUrl()}/auth?invite=${invite.token}`;
       setInviteLink(link);
 
-      const selectedBrand = brands.find(b => b.id === selectedBrandId);
-
-      // Send the invite email
-      const { error: emailError } = await supabase.functions.invoke("send-invite-email", {
-        body: {
-          email: email.toLowerCase(),
-          brand_name: selectedBrand?.name || "Creators Control",
-          invite_link: link,
-        },
-      });
-
-      if (emailError) {
-        console.error("Failed to send invite email:", emailError);
-        toast({
-          title: "Invite created",
-          description: `Invite created but email failed to send. You can share the link manually.`,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Invite sent!",
-          description: `Email sent to ${email} with their invite link.`,
-        });
-      }
+      const sent = await sendInviteEmail(normalizedEmail, brandName, link);
+      toast(
+        sent
+          ? {
+              title: "Invite sent!",
+              description: `Email sent to ${normalizedEmail} with their invite link.`,
+            }
+          : {
+              title: "Invite created",
+              description: "Invite created but email failed to send. You can share the link manually.",
+              variant: "destructive",
+            },
+      );
 
       onInviteSent?.();
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error creating invite:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to create invite",
+        description: error instanceof Error && error.message ? error.message : "Failed to create invite",
         variant: "destructive",
       });
     } finally {

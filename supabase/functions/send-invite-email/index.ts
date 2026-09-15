@@ -1,8 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { getSecret } from "../_shared/secrets.ts";
 
-const RESEND_API_KEY = (await getSecret("RESEND_API_KEY"));
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -43,6 +41,9 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
+    // Resolved per request rather than at module load, so a key saved in Admin -> Setup is
+    // picked up without a redeploy and a failed read at cold start does not stick.
+    const RESEND_API_KEY = await getSecret("RESEND_API_KEY");
     if (!RESEND_API_KEY) throw new Error("Email service not configured");
 
     const { email, brand_name, invite_link }: InviteEmailRequest = await req.json();
