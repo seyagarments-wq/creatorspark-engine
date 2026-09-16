@@ -5,22 +5,18 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Trophy, Crown, Medal, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 
-type SortTab = "revenue" | "videos" | "streak" | "referrals";
+type SortTab = "revenue" | "videos";
 
 interface LeaderboardEntry {
   id: string;
   full_name: string;
   avatar_url: string | null;
-  tier: string;
   approvedVideos: number;
   totalSales: number;
-  currentStreak: number;
   totalEarnings: number;
   commissionEarnings: number;
   totalRevenue: number;
   level: number;
-  referralCount: number;
-  referralBonus: number;
   metric_value: number;
   rank: number;
 }
@@ -68,17 +64,10 @@ export function DashboardLeaderboard() {
 
   const getMetricValue = (e: LeaderboardEntry) => {
     if (tab === "revenue") return fmt(e.totalRevenue);
-    if (tab === "videos") return `${e.approvedVideos}`;
-    if (tab === "referrals") return `${e.referralCount}`;
-    return `${e.currentStreak}🔥`;
+    return `${e.approvedVideos}`;
   };
 
-  const getSubtext = (e: LeaderboardEntry) => {
-    if (tab === "revenue") return `${e.approvedVideos} approved`;
-    if (tab === "videos") return `${e.approvedVideos} approved`;
-    if (tab === "referrals") return e.referralBonus > 0 ? fmt(e.referralBonus) + " bonus" : "referrals";
-    return `${e.approvedVideos} videos`;
-  };
+  const getSubtext = (e: LeaderboardEntry) => `${e.approvedVideos} approved`;
 
   if (loading) {
     return (
@@ -106,8 +95,6 @@ export function DashboardLeaderboard() {
             <TabsList className="h-7">
               <TabsTrigger value="revenue" className="text-[10px] px-2.5 h-5">Revenue</TabsTrigger>
               <TabsTrigger value="videos" className="text-[10px] px-2.5 h-5">Videos</TabsTrigger>
-              <TabsTrigger value="streak" className="text-[10px] px-2.5 h-5">Streak</TabsTrigger>
-              <TabsTrigger value="referrals" className="text-[10px] px-2.5 h-5">Referrals</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>

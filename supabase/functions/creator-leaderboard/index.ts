@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-type MetricType = "earnings" | "streak" | "videos" | "referrals" | "revenue";
+type MetricType = "earnings" | "videos" | "referrals" | "revenue";
 
 interface LeaderboardRequest {
   metric?: MetricType;
@@ -155,7 +155,7 @@ serve(async (req) => {
       }
     }
 
-    // 5) Bonus payouts (bounties/challenges)
+    // 5) Bonus payouts (bounties)
     const creatorBonus: Record<string, number> = {};
     const payouts = await fetchAll<{ creator_id: string; amount: number }>((from, to) =>
       supabaseAdmin
@@ -163,30 +163,14 @@ serve(async (req) => {
         .select("creator_id, amount")
         .in("creator_id", profileIds)
         .in("status", ["paid", "pending", "approved"])
-        .in("payout_type", ["bounty", "challenge", "weekly_challenge"])
+        .in("payout_type", ["bounty"])
         .range(from, to),
     );
     for (const p of payouts) {
       creatorBonus[p.creator_id] = (creatorBonus[p.creator_id] || 0) + (p.amount || 0);
     }
 
-    // 6) Gamification (level + streak)
-    const creatorLevel: Record<string, number> = {};
-    const creatorStreak: Record<string, number> = {};
-    const gamification = await fetchAll<{ creator_id: string; current_level: number; current_streak: number }>(
-      (from, to) =>
-        supabaseAdmin
-          .from("creator_gamification")
-          .select("creator_id, current_level, current_streak")
-          .in("creator_id", profileIds)
-          .range(from, to),
-    );
-    for (const g of gamification) {
-      creatorLevel[g.creator_id] = g.current_level ?? 1;
-      creatorStreak[g.creator_id] = g.current_streak ?? 0;
-    }
-
-    // 7) Referral data (successful referrals count + bonus earned)
+    // 6) Referral data (successful referrals count + bonus earned)
     const creatorReferralCount: Record<string, number> = {};
     const creatorReferralBonus: Record<string, number> = {};
     const referrals = await fetchAll<{ referrer_id: string }>(
@@ -210,39 +194,27 @@ serve(async (req) => {
       const commissionEarnings = totalRevenue * (commissionRate / 100);
       const bonusEarnings = creatorBonus[p.id] || 0;
       const totalEarnings = commissionEarnings + bonusEarnings;
-      const currentStreak = creatorStreak[p.id] || 0;
-      const level = creatorLevel[p.id] || 1;
       const referralCount = creatorReferralCount[p.id] || 0;
       const referralBonus = creatorReferralBonus[p.id] || 0;
-
-      let tier = "Bronze";
-      if (approvedVideos >= 50) tier = "Platinum";
-      else if (approvedVideos >= 25) tier = "Gold";
-      else if (approvedVideos >= 10) tier = "Silver";
 
       const metricValue =
         metric === "revenue"
           ? totalRevenue
           : metric === "earnings"
             ? commissionEarnings
-            : metric === "videos"
-              ? approvedVideos
-              : metric === "referrals"
-                ? referralCount
-                : currentStreak;
+            : metric === "referrals"
+              ? referralCount
+              : approvedVideos;
 
       return {
         id: p.id,
         full_name: p.full_name || "Unknown Creator",
         avatar_url: p.avatar_url,
-        tier,
         approvedVideos,
         totalRevenue,
         totalSales,
-        currentStreak,
         totalEarnings,
         commissionEarnings,
-        level,
         referralCount,
         referralBonus,
         metric_value: metricValue,

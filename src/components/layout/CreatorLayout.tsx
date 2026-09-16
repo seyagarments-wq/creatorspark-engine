@@ -60,7 +60,7 @@ const navSections = [
     items: [
       { icon: ShoppingBag, label: "Brands", href: "/creator/brand" },
       { icon: Package, label: "Samples", href: "/creator/samples", badgeKey: "samples" as BadgeSection },
-      { icon: Target, label: "Rewards", href: "/creator/bounties", badgeKey: "rewards" as BadgeSection },
+      { icon: Target, label: "Bounties", href: "/creator/bounties", badgeKey: "rewards" as BadgeSection },
       { icon: Trophy, label: "Leaderboard", href: "/creator/leaderboard" },
       { icon: GraduationCap, label: "Learn", href: "/creator/learn", badgeKey: "learn" as BadgeSection },
       { icon: UserPlus, label: "Referrals", href: "/creator/referrals" },

@@ -12,13 +12,12 @@ const logStep = (step: string, details?: Record<string, unknown>) => {
 };
 
 interface BroadcastRequest {
-  event_type: "video_submitted" | "video_approved" | "payout_processed" | "streak_milestone";
+  event_type: "video_submitted" | "video_approved" | "payout_processed";
   actor_name: string;
   actor_user_id: string;
   details?: {
     video_count?: number;
     amount?: number;
-    streak_days?: number;
   };
 }
 
@@ -35,22 +34,14 @@ function buildNotificationContent(event: BroadcastRequest): { title: string; mes
     case "video_approved":
       return {
         title: `Cohort update: ${event.actor_name} had a video approved`,
-        message: `A video from ${event.actor_name} has been approved and is now in use. Continue submitting your own content to remain eligible for this month's commission.`,
+        message: `A video from ${event.actor_name} has been approved and is now in use.`,
         link: "/creator/submit",
       };
     case "payout_processed": {
       const amount = event.details?.amount || 0;
       return {
         title: `Cohort update: ${event.actor_name} received a payout`,
-        message: `${event.actor_name} was paid $${amount.toFixed(2)} this period. Payouts depend on consistent uploads — keep your own submissions on schedule to remain eligible.`,
-        link: "/creator/submit",
-      };
-    }
-    case "streak_milestone": {
-      const streakDays = event.details?.streak_days || 7;
-      return {
-        title: `Cohort update: ${event.actor_name} reached a ${streakDays}-day upload streak`,
-        message: `${event.actor_name} has uploaded for ${streakDays} consecutive days. Consistency directly impacts your eligibility — review your own calendar and stay on schedule.`,
+        message: `${event.actor_name} was paid $${amount.toFixed(2)} this period.`,
         link: "/creator/submit",
       };
     }

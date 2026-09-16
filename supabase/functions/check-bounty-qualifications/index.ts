@@ -166,7 +166,7 @@ serve(async (req) => {
 
     // 5. Check each bounty against each creator
     let newQualifications = 0;
-    const notifications: { userId: string; bountyTitle: string; rewardAmount: number; xpReward: number }[] = [];
+    const notifications: { userId: string; bountyTitle: string; rewardAmount: number }[] = [];
 
     for (const bounty of activeBounties) {
       // Check time limit
@@ -281,33 +281,10 @@ serve(async (req) => {
 
           newQualifications++;
 
-          // Award XP if bounty has xp_reward
-          const xpReward = bounty.xp_reward || 0;
-          if (xpReward > 0) {
-            const { data: gamification } = await supabase
-              .from("creator_gamification")
-              .select("total_xp, current_level")
-              .eq("creator_id", creator.creatorId)
-              .single();
-
-            if (gamification) {
-              const newXp = (gamification.total_xp || 0) + xpReward;
-              const newLevel = Math.max(1, Math.floor(Math.sqrt(newXp / 50)) + 1);
-
-              await supabase
-                .from("creator_gamification")
-                .update({ total_xp: newXp, current_level: newLevel })
-                .eq("creator_id", creator.creatorId);
-
-              logStep("Awarded bounty XP", { creator: creator.fullName, xp: xpReward, newXp, newLevel });
-            }
-          }
-
           notifications.push({
             userId: creator.userId,
             bountyTitle: bounty.title,
             rewardAmount: bounty.reward_amount,
-            xpReward,
           });
         }
       }
@@ -322,7 +299,7 @@ serve(async (req) => {
           body: {
             user_id: notification.userId,
             title: "You just unlocked a bounty. 🎯",
-            message: `You qualified for "<strong>${notification.bountyTitle}</strong>" and earned a <strong>$${notification.rewardAmount.toFixed(2)}</strong> reward${notification.xpReward > 0 ? ` plus ${notification.xpReward} XP` : ""}!\n\nThis is what consistent posting gets you. Keep going.`,
+            message: `You qualified for "<strong>${notification.bountyTitle}</strong>" and earned a <strong>$${notification.rewardAmount.toFixed(2)}</strong> reward!\n\nThis is what consistent posting gets you. Keep going.`,
             notification_type: "bounty",
             link: "/creator/bounties",
             button_text: "View Your Bounty",
@@ -333,9 +310,6 @@ serve(async (req) => {
         logStep("Failed to send notification email", { error: String(emailError) });
       }
     }
-
-    // 7. Check and complete weekly challenges for all creators
-    await checkWeeklyChallenges(supabase, creatorProgress);
 
     return new Response(
       JSON.stringify({
@@ -357,146 +331,3 @@ serve(async (req) => {
     );
   }
 });
-
-async function checkWeeklyChallenges(supabase: any, creatorProgress: CreatorProgress[]) {
-  logStep("Checking weekly challenges");
-
-  // Get current week bounds
-  const now = new Date();
-  const weekStart = new Date(now);
-  weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-  weekStart.setHours(0, 0, 0, 0);
-  
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekEnd.getDate() + 6);
-  weekEnd.setHours(23, 59, 59, 999);
-
-  const weekStartStr = weekStart.toISOString().split("T")[0];
-  const weekEndStr = weekEnd.toISOString().split("T")[0];
-
-  // Get active weekly challenges
-  const { data: challenges } = await supabase
-    .from("weekly_challenges")
-    .select("*")
-    .eq("is_active", true)
-    .lte("week_start", weekEndStr)
-    .gte("week_end", weekStartStr);
-
-  if (!challenges || challenges.length === 0) {
-    logStep("No active weekly challenges");
-    return;
-  }
-
-  logStep("Found active weekly challenges", { count: challenges.length });
-
-  // Get existing completions
-  const { data: completions } = await supabase
-    .from("creator_challenge_completions")
-    .select("creator_id, challenge_id");
-
-  const completedSet = new Set(
-    completions?.map((c: any) => `${c.creator_id}:${c.challenge_id}`) || []
-  );
-
-  for (const challenge of challenges) {
-    for (const creator of creatorProgress) {
-      const key = `${creator.creatorId}:${challenge.id}`;
-      
-      if (completedSet.has(key)) continue;
-
-      // Calculate progress for this challenge type
-      let currentProgress = 0;
-      
-      switch (challenge.challenge_type) {
-        case "upload_count": {
-          const { count } = await supabase
-            .from("videos")
-            .select("id", { count: "exact" })
-            .eq("creator_id", creator.creatorId)
-            .eq("status", "approved")
-            .gte("created_at", challenge.week_start);
-          currentProgress = count || 0;
-          break;
-        }
-        case "sale_count": {
-          const { data: videos } = await supabase
-            .from("videos")
-            .select("id")
-            .eq("creator_id", creator.creatorId);
-          
-          if (videos && videos.length > 0) {
-            const { data: perfData } = await supabase
-              .from("performance_data")
-              .select("purchases")
-              .in("video_id", videos.map((v: any) => v.id))
-              .gte("recorded_at", challenge.week_start);
-            
-            currentProgress = perfData?.reduce((sum: number, pd: any) => sum + (pd.purchases || 0), 0) || 0;
-          }
-          break;
-        }
-        case "impressions": {
-          currentProgress = creator.impressions;
-          break;
-        }
-      }
-
-      // Check if challenge is complete
-      if (currentProgress >= challenge.target_value) {
-        logStep("Creator completed weekly challenge", {
-          creator: creator.fullName,
-          challenge: challenge.title,
-          progress: currentProgress,
-          target: challenge.target_value,
-        });
-
-        // Record completion
-        const { error: completionError } = await supabase
-          .from("creator_challenge_completions")
-          .insert({
-            creator_id: creator.creatorId,
-            challenge_id: challenge.id,
-            xp_earned: challenge.xp_reward,
-            bonus_earned: challenge.bonus_reward || 0,
-          });
-
-        if (completionError) {
-          logStep("Failed to record challenge completion", { error: completionError.message });
-          continue;
-        }
-
-        // Update gamification XP
-        const { data: gamification } = await supabase
-          .from("creator_gamification")
-          .select("total_xp, current_level")
-          .eq("creator_id", creator.creatorId)
-          .single();
-
-        if (gamification) {
-          const newXp = (gamification.total_xp || 0) + challenge.xp_reward;
-          const newLevel = Math.max(1, Math.floor(Math.sqrt(newXp / 50)) + 1);
-
-          await supabase
-            .from("creator_gamification")
-            .update({ total_xp: newXp, current_level: newLevel })
-            .eq("creator_id", creator.creatorId);
-        }
-
-        // Send notification
-        try {
-          await supabase.functions.invoke("send-notification-email", {
-            body: {
-              user_id: creator.userId,
-              title: "🏆 Weekly Challenge Completed!",
-              message: `Amazing! You completed "${challenge.title}" and earned ${challenge.xp_reward} XP${challenge.bonus_reward ? ` plus a $${Number(challenge.bonus_reward).toFixed(2)} bonus` : ""}!`,
-              notification_type: "bounty",
-              link: "/creator/bounties",
-            },
-          });
-        } catch (notifyError) {
-          logStep("Failed to send challenge notification", { error: String(notifyError) });
-        }
-      }
-    }
-  }
-}

@@ -32,7 +32,6 @@ import {
   Library,
   MonitorPlay,
   Images,
-  BadgeCheck,
   Signature,
   LayoutDashboard,
 } from "lucide-react";
@@ -74,7 +73,6 @@ const adminNavSections: NavSection[] = [
     title: "CREATORS",
     items: [
       { icon: Contact, label: "Roster", href: "/admin/creators" },
-      { icon: BadgeCheck, label: "Eligibility", href: "/admin/eligibility" },
       { icon: Signature, label: "Agreements", href: "/admin/agreements" },
       { icon: NotebookPen, label: "Briefs", href: "/admin/briefs" },
       { icon: Package, label: "Sample Requests", href: "/admin/samples" },

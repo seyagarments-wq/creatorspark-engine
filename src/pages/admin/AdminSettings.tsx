@@ -10,9 +10,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Settings, Bell, DollarSign, Shield, Save, Loader2, CheckCircle, AlertTriangle, Trash2, RotateCcw, Bomb, Globe, BarChart3, Send, Megaphone, Sticker } from "lucide-react";
+import { Settings, Bell, DollarSign, Shield, Save, Loader2, CheckCircle, AlertTriangle, Trash2, RotateCcw, Bomb, Globe, BarChart3, Send, Megaphone, Sticker, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { useSettings } from "@/hooks/use-settings";
+import { WEEKDAYS, weekdayLabel, type Weekday } from "@/lib/upload-day";
 import { MetaConnectionDialog } from "@/components/admin/MetaConnectionDialog";
 import { StickerPackManager } from "@/components/admin/StickerPackManager";
 import { supabase } from "@/integrations/supabase/client";
@@ -59,6 +60,7 @@ export default function AdminSettings() {
   const [resetAllConfirmText, setResetAllConfirmText] = useState("");
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [timezone, setTimezone] = useState("America/Los_Angeles");
+  const [uploadWeekday, setUploadWeekday] = useState<Weekday>("friday");
   const [creatorMetrics, setCreatorMetrics] = useState({
     impressions: true,
     link_clicks: true,
@@ -120,6 +122,9 @@ export default function AdminSettings() {
         setTimezone(settings.analytics.timezone);
         setCreatorMetrics(settings.analytics.creator_metrics);
       }
+      if (settings.upload_schedule) {
+        setUploadWeekday(settings.upload_schedule.weekday);
+      }
     }
   }, [loading, settings]);
 
@@ -147,6 +152,9 @@ export default function AdminSettings() {
       analytics: {
         timezone,
         creator_metrics: creatorMetrics,
+      },
+      upload_schedule: {
+        weekday: uploadWeekday,
       },
     });
 
@@ -423,6 +431,32 @@ export default function AdminSettings() {
           </CardContent>
         </Card>
 
+        {/* Weekly Upload Day */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarDays className="w-5 h-5" />
+              Weekly upload day
+            </CardTitle>
+            <CardDescription>Every creator sees this as their upload day. Change it any time.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 max-w-xs">
+              <Label htmlFor="uploadWeekday">Upload day</Label>
+              <Select value={uploadWeekday} onValueChange={(v) => setUploadWeekday(v as Weekday)}>
+                <SelectTrigger id="uploadWeekday">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {WEEKDAYS.map((day) => (
+                    <SelectItem key={day} value={day}>{weekdayLabel(day)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Notification Settings */}
         <Card>
           <CardHeader>
@@ -646,7 +680,7 @@ export default function AdminSettings() {
               <div>
                 <p className="font-medium text-sm sm:text-base">Reset All Creator Stats</p>
                 <p className="text-sm text-muted-foreground">
-                  Reset XP, levels, streaks, challenge progress, payouts, and bounties for all creators
+                  Clear payout records and bounty progress for all creators
                 </p>
               </div>
               <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
@@ -662,9 +696,6 @@ export default function AdminSettings() {
                     <AlertDialogDescription className="space-y-2">
                       <p>This will permanently reset for <strong>all creators</strong>:</p>
                       <ul className="list-disc list-inside text-sm space-y-1">
-                        <li>XP and levels back to 0/Level 1</li>
-                        <li>Current and longest streaks</li>
-                        <li>Weekly challenge progress</li>
                         <li>All payout records</li>
                         <li>All bounty progress</li>
                       </ul>
@@ -760,7 +791,7 @@ export default function AdminSettings() {
               <div>
                 <p className="font-medium text-sm sm:text-base text-destructive">Reset Entire Platform</p>
                 <p className="text-sm text-muted-foreground">
-                  Delete ALL videos, reset ALL creator stats, earnings, and progress to zero
+                  Delete ALL videos and clear ALL creator earnings and bounty progress
                 </p>
               </div>
               <AlertDialog open={resetAllDialogOpen} onOpenChange={setResetAllDialogOpen}>
@@ -778,9 +809,8 @@ export default function AdminSettings() {
                       <ul className="list-disc list-inside text-sm space-y-1">
                         <li>All video submissions and files</li>
                         <li>All performance/analytics data</li>
-                        <li>All creator XP, levels, and streaks</li>
                         <li>All earnings and payout records</li>
-                        <li>All bounty and challenge progress</li>
+                        <li>All bounty progress</li>
                         <li>Reset video counts on all profiles</li>
                       </ul>
                       <p className="text-destructive font-bold pt-2">⚠️ THIS CANNOT BE UNDONE!</p>

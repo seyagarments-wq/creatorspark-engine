@@ -130,28 +130,6 @@ serve(async (req) => {
         const approvedCount = approvedVideos?.length || 0;
         const eligibleForGuarantee = approvedCount >= VIDEOS_FOR_GUARANTEE;
 
-        // Phase 4: gate on cohort eligibility — ineligible creators forfeit (no rollover)
-        const monthKey = monthStart.toISOString().slice(0, 10);
-        const { data: elig } = await supabaseClient
-          .from("creator_monthly_eligibility")
-          .select("status, missed_days")
-          .eq("creator_id", creator.id)
-          .eq("month", monthKey)
-          .maybeSingle();
-
-        if (elig && elig.status === "ineligible") {
-          results.push({
-            creatorId: creator.id,
-            creatorName: creator.full_name,
-            approvedVideosCount: approvedCount,
-            eligibleForGuarantee: false,
-            guaranteeAmount: 0,
-            status: "skipped",
-            reason: `Forfeited: ${elig.missed_days} missed days exceeded cohort threshold`,
-          });
-          continue;
-        }
-
         if (!eligibleForGuarantee) {
           results.push({
             creatorId: creator.id,

@@ -21,7 +21,6 @@ import {
   Users,
   GraduationCap,
   ShieldCheck,
-  Gift,
   Camera,
   CalendarDays,
 } from "lucide-react";
@@ -37,7 +36,6 @@ const navItems = [
   { icon: FileText, label: "Briefs", href: "/creator/briefs" },
   { icon: Package, label: "Samples", href: "/creator/samples" },
   { icon: Trophy, label: "Bounties", href: "/creator/bounties" },
-  { icon: Gift, label: "Reward Shop", href: "/creator/rewards" },
   { icon: Medal, label: "Leaderboard", href: "/creator/leaderboard" },
   { icon: Users, label: "Refer & Earn", href: "/creator/referrals" },
   { icon: MessageSquare, label: "Chat", href: "/creator/chat" },
