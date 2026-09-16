@@ -40,7 +40,7 @@ serve(async (req) => {
       .from("performance_data")
       .select(`
         *,
-        videos(id, title, unique_video_id, creator_id, hook_score, profiles:creator_id(full_name, commission_percentage))
+        videos(id, title, unique_video_id, creator_id, hook_score, profiles:creator_id(full_name))
       `)
       .gte("metric_date", weekStartDate)
       .lte("metric_date", weekEndDate);

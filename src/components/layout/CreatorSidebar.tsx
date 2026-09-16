@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   Camera,
   CalendarDays,
+  Percent,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.png";
@@ -40,6 +41,7 @@ const navItems = [
   { icon: Users, label: "Refer & Earn", href: "/creator/referrals" },
   { icon: MessageSquare, label: "Chat", href: "/creator/chat" },
   { icon: DollarSign, label: "Payouts", href: "/creator/payouts" },
+  { icon: Percent, label: "Bonus", href: "/creator/bonus" },
   { icon: User, label: "Profile", href: "/creator/profile" },
   { icon: GraduationCap, label: "Learn", href: "/creator/learn" },
   { icon: HelpCircle, label: "Help", href: "/creator/help" },

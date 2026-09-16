@@ -88,7 +88,15 @@ from public.videos v
 cross join generate_series(0, 3) w
 where v.creator_id = 'f0000000-0000-4000-8000-000000000011'
 on conflict (video_id, metric_date) do update set revenue = excluded.revenue;
--- 24 videos x 4 weeks x $125 = $12,000
+-- 24 videos x 4 weeks x $125 = $12,000 (spread over the last 4 weeks; most of it lands in the FIRST cycle)
+
+-- Also put $12,000 into the CURRENT cycle so the bonus page shows 4% / $480 right away (test paths 5 and 6):
+-- 24 videos x 2 days (today, yesterday) x $250.
+insert into public.performance_data (video_id, metric_date, impressions, clicks, purchases, spend, revenue, recorded_at)
+select v.id, (current_date - w)::date, 40000, 800, 16, 300.00, 250.00, now()
+from public.videos v cross join generate_series(0, 1) w
+where v.creator_id = 'f0000000-0000-4000-8000-000000000011' and v.status = 'approved'
+on conflict (video_id, metric_date) do update set revenue = excluded.revenue;
 
 select 'seeded' as result,
   (select count(*) from public.videos where creator_id='f0000000-0000-4000-8000-000000000011' and status='approved') as ada_approved,

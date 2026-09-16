@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       ad_copy_templates: {
@@ -2186,9 +2211,14 @@ export type Database = {
           notes: string | null
           paid_at: string | null
           payout_type: string
+          paypal_batch_id: string | null
+          period_end: string | null
+          period_start: string | null
           reference_id: string | null
           status: Database["public"]["Enums"]["payout_status"]
           stripe_transfer_id: string | null
+          updated_at: string
+          video_count: number | null
         }
         Insert: {
           amount: number
@@ -2198,9 +2228,14 @@ export type Database = {
           notes?: string | null
           paid_at?: string | null
           payout_type: string
+          paypal_batch_id?: string | null
+          period_end?: string | null
+          period_start?: string | null
           reference_id?: string | null
           status?: Database["public"]["Enums"]["payout_status"]
           stripe_transfer_id?: string | null
+          updated_at?: string
+          video_count?: number | null
         }
         Update: {
           amount?: number
@@ -2210,9 +2245,14 @@ export type Database = {
           notes?: string | null
           paid_at?: string | null
           payout_type?: string
+          paypal_batch_id?: string | null
+          period_end?: string | null
+          period_start?: string | null
           reference_id?: string | null
           status?: Database["public"]["Enums"]["payout_status"]
           stripe_transfer_id?: string | null
+          updated_at?: string
+          video_count?: number | null
         }
         Relationships: [
           {
@@ -2500,6 +2540,27 @@ export type Database = {
           },
         ]
       }
+      platform_secrets: {
+        Row: {
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: string
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value: string
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -2508,6 +2569,7 @@ export type Database = {
           created_at: string
           email: string
           email_notifications: boolean | null
+          first_video_at: string | null
           full_name: string
           id: string
           instagram_access_token: string | null
@@ -2522,6 +2584,7 @@ export type Database = {
           notify_video_updates: boolean | null
           partnership_ads_enabled: boolean | null
           payment_info: string | null
+          payout_cycle_days: number
           payout_method: string
           paypal_email: string | null
           push_notifications_enabled: boolean | null
@@ -2539,6 +2602,7 @@ export type Database = {
           created_at?: string
           email: string
           email_notifications?: boolean | null
+          first_video_at?: string | null
           full_name: string
           id?: string
           instagram_access_token?: string | null
@@ -2553,6 +2617,7 @@ export type Database = {
           notify_video_updates?: boolean | null
           partnership_ads_enabled?: boolean | null
           payment_info?: string | null
+          payout_cycle_days?: number
           payout_method?: string
           paypal_email?: string | null
           push_notifications_enabled?: boolean | null
@@ -2570,6 +2635,7 @@ export type Database = {
           created_at?: string
           email?: string
           email_notifications?: boolean | null
+          first_video_at?: string | null
           full_name?: string
           id?: string
           instagram_access_token?: string | null
@@ -2584,6 +2650,7 @@ export type Database = {
           notify_video_updates?: boolean | null
           partnership_ads_enabled?: boolean | null
           payment_info?: string | null
+          payout_cycle_days?: number
           payout_method?: string
           paypal_email?: string | null
           push_notifications_enabled?: boolean | null
@@ -3182,6 +3249,73 @@ export type Database = {
           },
         ]
       }
+      video_earnings: {
+        Row: {
+          accrued_at: string
+          amount: number
+          created_at: string
+          creator_id: string
+          id: string
+          paid_at: string | null
+          payout_id: string | null
+          rate_at_accrual: number
+          reversed_at: string | null
+          status: string
+          updated_at: string
+          video_id: string
+        }
+        Insert: {
+          accrued_at?: string
+          amount: number
+          created_at?: string
+          creator_id: string
+          id?: string
+          paid_at?: string | null
+          payout_id?: string | null
+          rate_at_accrual: number
+          reversed_at?: string | null
+          status?: string
+          updated_at?: string
+          video_id: string
+        }
+        Update: {
+          accrued_at?: string
+          amount?: number
+          created_at?: string
+          creator_id?: string
+          id?: string
+          paid_at?: string | null
+          payout_id?: string | null
+          rate_at_accrual?: number
+          reversed_at?: string | null
+          status?: string
+          updated_at?: string
+          video_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_earnings_creator_id_fkey"
+            columns: ["creator_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "video_earnings_payout_id_fkey"
+            columns: ["payout_id"]
+            isOneToOne: false
+            referencedRelation: "payouts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "video_earnings_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: true
+            referencedRelation: "videos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       video_review_messages: {
         Row: {
           content: string
@@ -3445,6 +3579,7 @@ export type Database = {
     }
     Functions: {
       auth_user_id_for_email: { Args: { _email: string }; Returns: string }
+      bonus_rate_for: { Args: { p_revenue: number }; Returns: number }
       calculate_level: { Args: { xp: number }; Returns: number }
       get_my_cohort_ids: { Args: never; Returns: string[] }
       get_my_profile_id: { Args: never; Returns: string }
@@ -3490,10 +3625,26 @@ export type Database = {
         }
         Returns: boolean
       }
+      open_due_payouts: {
+        Args: { p_creator_id?: string; p_dry_run?: boolean }
+        Returns: {
+          action: string
+          attributed_revenue: number
+          bonus_pay: number
+          bonus_rate: number
+          creator_id: string
+          creator_name: string
+          period_end: string
+          period_start: string
+          video_count: number
+          video_pay: number
+        }[]
+      }
+      pay_rate_per_video: { Args: never; Returns: number }
       validate_invite: {
         Args: { _token: string }
         Returns: {
-          brand_id: string | null
+          brand_id: string
           email: string
           expires_at: string
           id: string
@@ -3505,7 +3656,7 @@ export type Database = {
     Enums: {
       app_role: "admin" | "creator"
       bounty_status: "active" | "completed" | "cancelled"
-      payout_status: "pending" | "approved" | "paid"
+      payout_status: "pending" | "approved" | "paid" | "rejected"
       video_status:
         | "pending"
         | "approved"
@@ -3527,12 +3678,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3556,11 +3707,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3581,11 +3732,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3606,11 +3757,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3623,11 +3774,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3637,11 +3788,14 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["admin", "creator"],
       bounty_status: ["active", "completed", "cancelled"],
-      payout_status: ["pending", "approved", "paid"],
+      payout_status: ["pending", "approved", "paid", "rejected"],
       video_status: [
         "pending",
         "approved",

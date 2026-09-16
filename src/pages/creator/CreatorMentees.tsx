@@ -22,7 +22,6 @@ interface MenteeData {
   totalRejected: number;
   approvalRate: number;
   totalRevenue: number;
-  totalCommission: number;
   totalOrders: number;
   totalImpressions: number;
   totalClicks: number;
@@ -80,7 +79,7 @@ export default function CreatorMentees() {
           const chunk = videoIds.slice(i, i + 100);
           const { data } = await supabase
             .from("performance_data")
-            .select("video_id, revenue, purchases, commission_rate_at_time, impressions, clicks, spend")
+            .select("video_id, revenue, purchases, impressions, clicks, spend")
             .in("video_id", chunk);
           if (data) perfData.push(...data);
         }
@@ -114,10 +113,6 @@ export default function CreatorMentees() {
         const creatorVideoIds = new Set(creatorVideos.map((v) => v.id));
         const creatorPerf = perfData.filter((pd) => creatorVideoIds.has(pd.video_id));
         const totalRevenue = creatorPerf.reduce((sum, pd) => sum + (Number(pd.revenue) || 0), 0);
-        const totalCommission = creatorPerf.reduce(
-          (sum, pd) => sum + ((Number(pd.revenue) || 0) * (Number(pd.commission_rate_at_time) || 0)) / 100,
-          0
-        );
         const totalOrders = creatorPerf.reduce((sum, pd) => sum + (Number(pd.purchases) || 0), 0);
         const totalImpressions = creatorPerf.reduce((sum, pd) => sum + (Number(pd.impressions) || 0), 0);
         const totalClicks = creatorPerf.reduce((sum, pd) => sum + (Number(pd.clicks) || 0), 0);
@@ -135,7 +130,6 @@ export default function CreatorMentees() {
           totalRejected: rejected.length,
           approvalRate,
           totalRevenue,
-          totalCommission,
           totalOrders,
           totalImpressions,
           totalClicks,
@@ -271,10 +265,10 @@ export default function CreatorMentees() {
                       <div className="rounded-lg bg-secondary/50 p-2.5">
                         <div className="flex items-center gap-1 text-muted-foreground text-[10px] mb-0.5">
                           <DollarSign className="w-3 h-3" />
-                          Commission
+                          Ad Spend
                         </div>
                         <p className="font-semibold text-xs">
-                          ${m.totalCommission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ${m.totalSpend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
                       </div>
                       <div className="rounded-lg bg-secondary/50 p-2.5">

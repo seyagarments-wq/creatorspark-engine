@@ -34,9 +34,6 @@ import {
 import { VideoThumbnail } from "@/components/video/VideoThumbnail";
 import { VideoPreviewDialog } from "@/components/video/VideoPreviewDialog";
 
-/** Flat rate credited for every approved video. */
-const PER_VIDEO_RATE = 65;
-
 interface DashboardStats {
   totalVideos: number;
   approvedVideos: number;
@@ -238,7 +235,7 @@ export default function CreatorHome() {
       setLoading(true);
 
       // Fetch profile, videos, payouts, and bounties ALL in parallel
-      const [profileRes, videosRes, payoutsRes, bountiesRes] = await Promise.all([
+      const [profileRes, videosRes, payoutsRes, bountiesRes, ledgerRes] = await Promise.all([
         supabase.from("profiles").select("full_name").eq("id", profileId).single(),
         supabase.from("videos").select(`
           id, title, status, created_at, bounty_id,
@@ -246,6 +243,7 @@ export default function CreatorHome() {
         `).eq("creator_id", profileId).order("created_at", { ascending: false }),
         supabase.from("payouts").select("amount").eq("creator_id", profileId).in("status", ["paid", "pending", "approved"]).eq("payout_type", "bounty"),
         supabase.from("bounties").select("*").eq("status", "active"),
+        supabase.from("video_earnings").select("amount").eq("creator_id", profileId).in("status", ["accrued", "paid"]),
       ]);
 
       const profile = profileRes.data;
@@ -262,10 +260,10 @@ export default function CreatorHome() {
       const pendingVideos = videos?.filter((v) => v.status === "pending" || v.status === "saved_for_later").length || 0;
       const approvalRate = totalVideos > 0 ? Math.round((approvedVideos / totalVideos) * 100) : 0;
 
-      // Bounty videos pay the bounty amount instead of the per-video rate.
-      const approvedNonBounty = videos?.filter((v) => v.status === "approved" && !v.bounty_id).length || 0;
+      // Per-video pay comes from the ledger; bounty videos pay the bounty amount instead.
+      const videoPayEarned = ledgerRes.data?.reduce((sum, e) => sum + (Number(e.amount) || 0), 0) || 0;
       const bountyEarnings = payouts?.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) || 0;
-      const totalEarnings = approvedNonBounty * PER_VIDEO_RATE + bountyEarnings;
+      const totalEarnings = videoPayEarned + bountyEarnings;
 
       setStats({
         totalVideos,
@@ -398,7 +396,7 @@ export default function CreatorHome() {
                 Hey, {creatorName}! 👋
               </h1>
               <div className="space-y-0.5 text-sm md:text-base text-muted-foreground">
-                <p>${PER_VIDEO_RATE} per approved video, credited when it is approved.</p>
+                <p>${settings.pay_rates.per_video} per approved video, credited when it is approved.</p>
                 <p>
                   Upload day:{" "}
                   <span className="font-medium text-foreground">

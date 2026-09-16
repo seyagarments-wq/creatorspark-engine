@@ -9,7 +9,8 @@ import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
 interface FinancialData {
   totalRevenue: number;
   monthRevenue: number;
-  totalCommissionsOwed: number;
+  /** Unpaid payouts plus accrued video pay not yet in a payout. */
+  owed: number;
   totalPaid: number;
   pendingPayouts: number;
   pendingPayoutCount: number;
@@ -28,6 +29,7 @@ export function RevenueTracker() {
       .channel("revenue-tracker")
       .on("postgres_changes", { event: "*", schema: "public", table: "performance_data" }, () => debouncedFetch())
       .on("postgres_changes", { event: "*", schema: "public", table: "payouts" }, () => debouncedFetch())
+      .on("postgres_changes", { event: "*", schema: "public", table: "video_earnings" }, () => debouncedFetch())
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -35,32 +37,43 @@ export function RevenueTracker() {
 
   async function fetchFinancials() {
     try {
-      const [rpcRes, payoutsData] = await Promise.all([
+      const [rpcRes, payoutsData, accruedData] = await Promise.all([
         supabase.rpc("get_revenue_summary"),
         batchFetchAll((from, to) =>
           supabase.from("payouts").select("amount, status").range(from, to)
         ),
+        batchFetchAll((from, to) =>
+          supabase
+            .from("video_earnings")
+            .select("amount")
+            .eq("status", "accrued")
+            .is("payout_id", null)
+            .range(from, to)
+        ),
       ]);
 
-      const summary = rpcRes.data?.[0] ?? { total_revenue: 0, total_commissions: 0, month_revenue: 0 };
+      const summary = rpcRes.data?.[0] ?? { total_revenue: 0, month_revenue: 0 };
       const totalRevenue = Number(summary.total_revenue) || 0;
-      const totalCommissions = Number(summary.total_commissions) || 0;
       const monthRevenue = Number(summary.month_revenue) || 0;
 
-      let totalPaid = 0, pendingPayouts = 0, pendingPayoutCount = 0;
-      (payoutsData || []).forEach((p: any) => {
+      let totalPaid = 0, unpaidPayouts = 0, pendingPayouts = 0, pendingPayoutCount = 0;
+      (payoutsData || []).forEach((p) => {
         const amt = Number(p.amount) || 0;
         if (p.status === "paid") totalPaid += amt;
+        if (p.status === "pending" || p.status === "approved") unpaidPayouts += amt;
         if (p.status === "pending") {
           pendingPayouts += amt;
           pendingPayoutCount++;
         }
       });
 
+      // Video pay accrued since the last cycle closed, not yet opened as a payout.
+      const accruedNotOpened = (accruedData || []).reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+
       setData({
         totalRevenue,
         monthRevenue,
-        totalCommissionsOwed: Math.max(0, totalCommissions - totalPaid),
+        owed: unpaidPayouts + accruedNotOpened,
         totalPaid,
         pendingPayouts,
         pendingPayoutCount,
@@ -81,7 +94,7 @@ export function RevenueTracker() {
       <Card>
         <CardHeader className="p-3 md:p-6 pb-2">
           <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-            Revenue & Commissions
+            Revenue & Pay
           </CardTitle>
         </CardHeader>
         <CardContent className="flex justify-center py-6">
@@ -98,7 +111,7 @@ export function RevenueTracker() {
       <CardHeader className="p-3 md:p-6 pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-            Revenue & Commissions
+            Revenue & Pay
           </CardTitle>
           <Badge variant="outline" className="text-[10px] gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -133,7 +146,7 @@ export function RevenueTracker() {
               <Wallet className="w-3.5 h-3.5 text-amber-500" />
               <span className="text-[10px] text-muted-foreground">Owed</span>
             </div>
-            <p className="text-sm font-bold">{fmt(data.totalCommissionsOwed)}</p>
+            <p className="text-sm font-bold">{fmt(data.owed)}</p>
           </div>
         </div>
 

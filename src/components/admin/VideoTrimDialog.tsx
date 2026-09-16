@@ -20,7 +20,6 @@ import {
   Play,
   Pause,
   Loader2,
-  AlertTriangle,
   SkipBack,
   SkipForward,
   SplitSquareHorizontal,
@@ -432,7 +431,7 @@ export function VideoTrimDialog({
 
       // Clean up audio context
       if (audioContext) {
-        try { audioContext.close(); } catch (_) {}
+        try { audioContext.close(); } catch { /* already closed */ }
       }
 
       setProgressLabel("Uploading...");
@@ -479,8 +478,7 @@ export function VideoTrimDialog({
           video_url: urlData.publicUrl,
           thumbnail_url: thumbUrl,
           admin_edited: true,
-          commission_override: 5,
-        } as any)
+        })
         .eq("id", videoId);
       if (updateError) throw updateError;
 
@@ -489,14 +487,14 @@ export function VideoTrimDialog({
         .from("videos")
         .select("creator_id, title, profiles!videos_creator_id_fkey(user_id)")
         .eq("id", videoId)
-        .single()) as { data: any };
+        .single()) as unknown as { data: { title: string; profiles: { user_id: string } | null } | null };
 
       if (editedVideoInfo?.profiles?.user_id) {
         await supabase.functions.invoke("send-notification-email", {
           body: {
             user_id: editedVideoInfo.profiles.user_id,
             title: "Your video was edited",
-            message: `Your video "${editedVideoInfo.title}" has been edited by the team. The updated version is now live with a 5% commission rate.`,
+            message: `Your video "${editedVideoInfo.title}" has been edited by the team. The updated version is now live.`,
             notification_type: "video",
             link: "/creator/my-videos",
           },
@@ -508,16 +506,16 @@ export function VideoTrimDialog({
 
       toast({
         title: "Video saved",
-        description: `${keptClips.length} clip${keptClips.length > 1 ? "s" : ""} merged${replacementAudio ? " with new audio" : muteOriginal ? " (muted)" : ""}. Commission set to 5%.`,
+        description: `${keptClips.length} clip${keptClips.length > 1 ? "s" : ""} merged${replacementAudio ? " with new audio" : muteOriginal ? " (muted)" : ""}.`,
       });
 
       onTrimComplete();
       onOpenChange(false);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Edit error:", error);
       toast({
         title: "Edit failed",
-        description: error.message || "Failed to process video. Check browser console for details.",
+        description: error instanceof Error ? error.message : "Failed to process video. Check browser console for details.",
         variant: "destructive",
       });
     } finally {
@@ -538,22 +536,6 @@ export function VideoTrimDialog({
             </DialogTitle>
             <DialogDescription>{videoTitle}</DialogDescription>
           </DialogHeader>
-        </div>
-
-        <div className="px-6">
-          {/* Commission Warning */}
-          <div className="flex items-start gap-3 p-3 bg-warning/10 border border-warning/30 rounded-lg">
-            <AlertTriangle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-medium text-warning">
-                Commission will drop to 5%
-              </p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Editing a creator's video reduces the commission rate for this
-                specific video only.
-              </p>
-            </div>
-          </div>
         </div>
 
         {/* Video Player */}
@@ -930,7 +912,7 @@ export function VideoTrimDialog({
               <>
                 <Scissors className="w-4 h-4 mr-2" />
                 Save Edit ({keptClips.length} clip
-                {keptClips.length !== 1 && "s"} — 5% commission)
+                {keptClips.length !== 1 && "s"})
               </>
             )}
           </Button>

@@ -14,7 +14,6 @@ interface LeaderboardEntry {
   approvedVideos: number;
   totalSales: number;
   totalEarnings: number;
-  commissionEarnings: number;
   totalRevenue: number;
   level: number;
   metric_value: number;

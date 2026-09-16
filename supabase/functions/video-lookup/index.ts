@@ -53,8 +53,7 @@ Deno.serve(async (req) => {
           full_name,
           email,
           avatar_url,
-          instagram_username,
-          commission_percentage
+          instagram_username
         ),
         performance_data(
           impressions,
@@ -96,9 +95,16 @@ Deno.serve(async (req) => {
       { impressions: 0, clicks: 0, purchases: 0, revenue: 0, spend: 0 }
     );
 
-    // Calculate creator earnings
-    const commissionRate = (video.profiles as any)?.commission_percentage || 10;
-    const creatorEarnings = aggregatedStats.revenue * (commissionRate / 100);
+    // Creator earnings for this video: the flat per-video amount accrued on approval into the
+    // video_earnings ledger. Reversed rows do not count.
+    const { data: earningRow, error: earningError } = await supabase
+      .from("video_earnings")
+      .select("amount, status")
+      .eq("video_id", video.id)
+      .in("status", ["accrued", "paid"])
+      .maybeSingle();
+    if (earningError) console.error("video_earnings lookup error:", earningError.message);
+    const creatorEarnings = earningRow ? parseFloat(String(earningRow.amount)) || 0 : 0;
 
     // Determine if this is a legacy ID
     const isLegacyId = !/^V\d+-\d+$/.test(videoId);
@@ -125,7 +131,6 @@ Deno.serve(async (req) => {
         summary: {
           ...aggregatedStats,
           creator_earnings: creatorEarnings,
-          commission_rate: commissionRate,
           roas: aggregatedStats.spend > 0 
             ? (aggregatedStats.revenue / aggregatedStats.spend).toFixed(2) 
             : null,

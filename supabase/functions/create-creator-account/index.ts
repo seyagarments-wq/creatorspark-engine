@@ -130,7 +130,7 @@ serve(async (req) => {
               <li><strong>Set your password</strong> — <a href="${setPasswordLink}" style="color:#6366f1;">click here to choose your password</a>. The link lasts 1 hour; after that use "Forgot password" at <a href="${appUrl}/auth" style="color:#6366f1;">${appUrl.replace(/^https?:\/\//, "")}</a></li>
               <li><strong>Connect Stripe</strong> — So we can send you payouts</li>
               <li><strong>Request your free sample</strong> — Get the product shipped to you</li>
-              <li><strong>Submit your first video</strong> — Start earning commissions!</li>
+              <li><strong>Submit your first video</strong> and get paid for every approved video</li>
             </ol>
             <p style="margin-top:24px;">
               <a href="${setPasswordLink}" style="background:#6366f1;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600;">Set your password &amp; get started</a>

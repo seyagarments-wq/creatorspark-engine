@@ -79,7 +79,7 @@ const INTEGRATIONS: Integration[] = [
   {
     id: "stripe",
     name: "Stripe (payouts)",
-    description: "Creator Connect accounts, payouts and commission payments.",
+    description: "Creator Connect accounts and payouts.",
     testable: true,
     docsUrl: "https://dashboard.stripe.com/apikeys",
     steps: [
@@ -112,7 +112,7 @@ const INTEGRATIONS: Integration[] = [
   {
     id: "paypal",
     name: "PayPal (optional)",
-    description: "Alternative payout method for commission payments.",
+    description: "Payout rail for creators who cannot use Stripe.",
     docsUrl: "https://developer.paypal.com/dashboard/applications/live",
     steps: [
       "Open the PayPal developer dashboard and create a Live REST app.",

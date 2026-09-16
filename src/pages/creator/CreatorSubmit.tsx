@@ -743,10 +743,10 @@ export default function CreatorSubmit() {
                 <Label>Submit for a Bounty (optional)</Label>
                 <Select value={selectedBountyId} onValueChange={setSelectedBountyId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="None — counts toward monthly guarantee" />
+                    <SelectValue placeholder="None" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">None — counts toward monthly guarantee</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {activeBounties.map((bounty) => (
                       <SelectItem key={bounty.id} value={bounty.id}>
                         {bounty.title}
@@ -756,8 +756,8 @@ export default function CreatorSubmit() {
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   {selectedBountyId && selectedBountyId !== "none"
-                    ? "⚡ This upload will count toward the selected bounty but NOT the monthly $500 guarantee."
-                    : "Videos not tagged to a bounty count toward your 35-video monthly guarantee."}
+                    ? "This upload counts toward the selected bounty and is paid at the bounty amount instead of the per-video rate."
+                    : "Videos not tagged to a bounty earn the flat per-video rate when they are approved."}
                 </p>
               </div>
             )}

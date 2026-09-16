@@ -10,10 +10,27 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Settings, Bell, DollarSign, Shield, Save, Loader2, CheckCircle, AlertTriangle, Trash2, RotateCcw, Bomb, Globe, BarChart3, Send, Megaphone, Sticker, CalendarDays } from "lucide-react";
+import { Settings, Bell, DollarSign, Shield, Save, Loader2, CheckCircle, AlertTriangle, Trash2, RotateCcw, Bomb, Globe, BarChart3, Send, Megaphone, CalendarDays, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { useSettings } from "@/hooks/use-settings";
 import { WEEKDAYS, weekdayLabel, type Weekday } from "@/lib/upload-day";
+import { DEFAULT_PAY_RATES, normalizePayRates, type BonusBand } from "../../../supabase/functions/_shared/payout-math";
+
+const BAND_COUNT = 3;
+
+/** Exactly three editable rows, sorted by `min`, padded from the defaults when the saved value is short. */
+function toBandRows(bands: BonusBand[]): BonusBand[] {
+  const sorted = [...bands].sort((a, b) => a.min - b.min).slice(0, BAND_COUNT);
+  while (sorted.length < BAND_COUNT) {
+    sorted.push(DEFAULT_PAY_RATES.bonus_bands[sorted.length] ?? { min: 0, rate: 0 });
+  }
+  return sorted;
+}
+
+const toNumber = (raw: string, fallback = 0) => {
+  const n = parseFloat(raw);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+};
 import { MetaConnectionDialog } from "@/components/admin/MetaConnectionDialog";
 import { StickerPackManager } from "@/components/admin/StickerPackManager";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,16 +56,12 @@ import {
 export default function AdminSettings() {
   const { settings, loading, saveAllSettings } = useSettings();
   const [localSettings, setLocalSettings] = useState({
-        defaultCommission: 10,
-    bronzeCommission: 10,
-    silverCommission: 12,
-    goldCommission: 13,
-    platinumCommission: 15,
     autoApproveVideos: false,
     emailNotifications: true,
-    payoutThreshold: 50,
     requireVideoReview: true,
   });
+  const [perVideo, setPerVideo] = useState<number>(DEFAULT_PAY_RATES.per_video);
+  const [bonusBands, setBonusBands] = useState<BonusBand[]>(toBandRows(DEFAULT_PAY_RATES.bonus_bands));
   const [saving, setSaving] = useState(false);
   const [metaDialogOpen, setMetaDialogOpen] = useState(false);
   const [metaStatus, setMetaStatus] = useState<"connected" | "disconnected" | "loading">("loading");
@@ -108,16 +121,13 @@ export default function AdminSettings() {
   useEffect(() => {
     if (!loading) {
       setLocalSettings({
-        defaultCommission: settings.commission.default,
-        bronzeCommission: settings.commission.bronze,
-        silverCommission: settings.commission.silver,
-        goldCommission: settings.commission.gold,
-        platinumCommission: settings.commission.platinum,
         autoApproveVideos: settings.video_review.auto_approve,
         emailNotifications: settings.notifications.email_enabled,
-        payoutThreshold: settings.payout_threshold.minimum,
         requireVideoReview: settings.video_review.require_review,
       });
+      const rates = normalizePayRates(settings.pay_rates);
+      setPerVideo(rates.per_video);
+      setBonusBands(toBandRows(rates.bonus_bands));
       if (settings.analytics) {
         setTimezone(settings.analytics.timezone);
         setCreatorMetrics(settings.analytics.creator_metrics);
@@ -131,16 +141,16 @@ export default function AdminSettings() {
   async function handleSave() {
     setSaving(true);
     
+    // Lowest band always starts at $0 so every revenue total lands in a band.
+    const cleanBands = toBandRows(
+      bonusBands.map((b) => ({ min: toNumber(String(b.min)), rate: toNumber(String(b.rate)) }))
+    );
+    cleanBands[0] = { ...cleanBands[0], min: 0 };
+
     const success = await saveAllSettings({
-      commission: {
-        default: localSettings.defaultCommission,
-        bronze: localSettings.bronzeCommission,
-        silver: localSettings.silverCommission,
-        gold: localSettings.goldCommission,
-        platinum: localSettings.platinumCommission,
-      },
-      payout_threshold: {
-        minimum: localSettings.payoutThreshold,
+      pay_rates: {
+        per_video: toNumber(String(perVideo), DEFAULT_PAY_RATES.per_video),
+        bonus_bands: cleanBands,
       },
       video_review: {
         auto_approve: localSettings.autoApproveVideos,
@@ -179,9 +189,9 @@ export default function AdminSettings() {
       toast.success("All creator stats have been reset to zero");
       setResetConfirmText("");
       setResetDialogOpen(false);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Reset creators error:", error);
-      toast.error(error.message || "Failed to reset creator stats");
+      toast.error(error instanceof Error ? error.message : "Failed to reset creator stats");
     } finally {
       setResettingCreators(false);
     }
@@ -200,9 +210,9 @@ export default function AdminSettings() {
       toast.success(data?.message || "All videos deleted");
       setDeleteConfirmText("");
       setDeleteDialogOpen(false);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Delete videos error:", error);
-      toast.error(error.message || "Failed to delete videos");
+      toast.error(error instanceof Error ? error.message : "Failed to delete videos");
     } finally {
       setDeletingVideos(false);
     }
@@ -221,9 +231,9 @@ export default function AdminSettings() {
       toast.success(data?.message || "Platform fully reset");
       setResetAllConfirmText("");
       setResetAllDialogOpen(false);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Reset all error:", error);
-      toast.error(error.message || "Failed to reset platform");
+      toast.error(error instanceof Error ? error.message : "Failed to reset platform");
     } finally {
       setResettingAll(false);
     }
@@ -249,8 +259,8 @@ export default function AdminSettings() {
       toast.success(`Broadcast sent to ${data?.sent || 0} creator${(data?.sent || 0) !== 1 ? "s" : ""}`);
       setBroadcastSubject("");
       setBroadcastMessage("");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to send broadcast");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to send broadcast");
     } finally {
       setSendingBroadcast(false);
     }
@@ -276,115 +286,83 @@ export default function AdminSettings() {
           <p className="text-sm text-muted-foreground">Manage your platform configuration</p>
         </div>
 
-        {/* Commission Settings */}
+        {/* Pay rates */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <DollarSign className="w-5 h-5" />
-              Commission Settings
+              Pay rates
             </CardTitle>
-            <CardDescription>Configure creator commission rates by tier</CardDescription>
+            <CardDescription>
+              Changes apply to future approvals and future cycles. Nothing already accrued or paid changes.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="defaultCommission">Default Rate (%)</Label>
-                <Input
-                  id="defaultCommission"
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={localSettings.defaultCommission}
-                  onChange={(e) =>
-                    setLocalSettings({ ...localSettings, defaultCommission: parseInt(e.target.value) || 0 })
-                  }
-                />
-                <p className="text-xs text-muted-foreground">For new creators</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="bronzeCommission">Bronze Tier (%)</Label>
-                <Input
-                  id="bronzeCommission"
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={localSettings.bronzeCommission}
-                  onChange={(e) =>
-                    setLocalSettings({ ...localSettings, bronzeCommission: parseInt(e.target.value) || 0 })
-                  }
-                />
-                <p className="text-xs text-muted-foreground">0–74 approved videos</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="silverCommission">Silver Tier (%)</Label>
-                <Input
-                  id="silverCommission"
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={localSettings.silverCommission}
-                  onChange={(e) =>
-                    setLocalSettings({ ...localSettings, silverCommission: parseInt(e.target.value) || 0 })
-                  }
-                />
-                <p className="text-xs text-muted-foreground">75–149 approved videos</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="goldCommission">Gold Tier (%)</Label>
-                <Input
-                  id="goldCommission"
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={localSettings.goldCommission}
-                  onChange={(e) =>
-                    setLocalSettings({ ...localSettings, goldCommission: parseInt(e.target.value) || 0 })
-                  }
-                />
-                <p className="text-xs text-muted-foreground">150–249 approved videos</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="platinumCommission">Platinum Tier (%)</Label>
-                <Input
-                  id="platinumCommission"
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={localSettings.platinumCommission}
-                  onChange={(e) =>
-                    setLocalSettings({ ...localSettings, platinumCommission: parseInt(e.target.value) || 0 })
-                  }
-                />
-                <p className="text-xs text-muted-foreground">250+ approved videos</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Payout Settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <DollarSign className="w-5 h-5" />
-              Payout Settings
-            </CardTitle>
-            <CardDescription>Configure payment thresholds</CardDescription>
-          </CardHeader>
-          <CardContent>
             <div className="space-y-2 max-w-xs">
-              <Label htmlFor="threshold">Minimum Payout Threshold ($)</Label>
+              <Label htmlFor="perVideo">Per approved video ($)</Label>
               <Input
-                id="threshold"
+                id="perVideo"
                 type="number"
                 min="0"
-                value={localSettings.payoutThreshold}
-                onChange={(e) =>
-                  setLocalSettings({ ...localSettings, payoutThreshold: parseInt(e.target.value) || 0 })
-                }
+                step="1"
+                inputMode="decimal"
+                value={perVideo}
+                onChange={(e) => setPerVideo(toNumber(e.target.value))}
               />
-              <p className="text-xs text-muted-foreground">
-                Minimum amount before creator can request payout
-              </p>
+              <p className="text-xs text-muted-foreground">Accrues the moment a non-bounty video is approved.</p>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-3">
+              <div className="space-y-0.5">
+                <Label>Revenue bonus bands</Label>
+                <p className="text-xs text-muted-foreground">
+                  Each 28-day cycle, the highest band the creator's attributed revenue reaches sets the rate, and that rate applies to all of it.
+                </p>
+              </div>
+              <div className="space-y-2 max-w-md">
+                {bonusBands.map((band, i) => (
+                  <div key={i} className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
+                    <div className="space-y-1">
+                      {i === 0 && <Label htmlFor={`band-min-${i}`} className="text-xs">From $</Label>}
+                      <Input
+                        id={`band-min-${i}`}
+                        type="number"
+                        min="0"
+                        step="100"
+                        inputMode="numeric"
+                        value={band.min}
+                        disabled={i === 0}
+                        onChange={(e) =>
+                          setBonusBands((prev) =>
+                            prev.map((b, idx) => (idx === i ? { ...b, min: toNumber(e.target.value) } : b))
+                          )
+                        }
+                      />
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-muted-foreground mb-3" />
+                    <div className="space-y-1">
+                      {i === 0 && <Label htmlFor={`band-rate-${i}`} className="text-xs">Rate (%)</Label>}
+                      <Input
+                        id={`band-rate-${i}`}
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.5"
+                        inputMode="decimal"
+                        value={band.rate}
+                        onChange={(e) =>
+                          setBonusBands((prev) =>
+                            prev.map((b, idx) => (idx === i ? { ...b, rate: toNumber(e.target.value) } : b))
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">The first band starts at $0. Bands are sorted by their starting revenue when saved.</p>
             </div>
           </CardContent>
         </Card>
