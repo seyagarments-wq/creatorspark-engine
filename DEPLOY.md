@@ -1,3 +1,8 @@
+> **Read `CLAUDE.md` and the Brain (`~/Documents/Brain/app-development/app-build-protocol.md`) first.**
+> Since 2026-09-16 there is a STAGING Supabase project (`gmimrunaoeymmnqlzimy`) that every Vercel preview
+> points at; production is `abqfarkftkbkmmzozdyv`. Production migrations go through the Supabase MCP
+> `apply_migration`, never `supabase db push` (production has no migration history). Deps install with bun.
+
 # Self-hosting on Vercel + Supabase
 
 This app is a plain Vite + React SPA with a standard Supabase backend. Nothing in it

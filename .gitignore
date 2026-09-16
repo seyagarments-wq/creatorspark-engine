@@ -25,3 +25,8 @@ dist-ssr
 
 # Vercel installs with bun from bun.lock; an npm lockfile here pulls different versions and fakes type errors
 package-lock.json
+
+# Local env files. Vercel injects VITE_ vars per environment; keep real files out of git.
+.env
+.env.*.local
+.staging-credentials.local

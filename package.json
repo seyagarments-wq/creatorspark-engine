@@ -10,6 +10,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "gen:types": "supabase gen types typescript --linked > src/integrations/supabase/types.ts",
     "test:watch": "vitest"
   },
   "dependencies": {
