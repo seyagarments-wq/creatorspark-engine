@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { functionErrorMessage } from "@/lib/function-error";
 import { batchFetchAll } from "@/lib/batch-fetch";
 import AdminLayout from "@/components/layout/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -289,7 +290,7 @@ export default function AdminPayouts() {
       const { data, error } = await supabase.functions.invoke("process-payout", {
         body: { payout_id: payout.id },
       });
-      if (error || data?.error) throw new Error(data?.error || error?.message || "Payout failed");
+      if (error || data?.error) throw new Error(data?.error || (await functionErrorMessage(error, "Payout failed")));
       toast.success(`Paid ${formatCurrency(Number(payout.amount))} to ${name} via ${rail.label}`);
       await fetchPayouts();
     } catch (err) {
@@ -303,7 +304,7 @@ export default function AdminPayouts() {
     setProcessingBulk(true);
     try {
       const { data, error } = await supabase.functions.invoke("process-bulk-payouts", { body: {} });
-      if (error || data?.error) throw new Error(data?.error || error?.message || "Bulk pay failed");
+      if (error || data?.error) throw new Error(data?.error || (await functionErrorMessage(error, "Bulk pay failed")));
 
       const summary = data as BulkPayoutSummary;
       setBulkResult(summary);
@@ -329,7 +330,7 @@ export default function AdminPayouts() {
     setPreviewing(true);
     try {
       const { data, error } = await supabase.functions.invoke("payout-cycle", { body: { dryRun: true } });
-      if (error || data?.error) throw new Error(data?.error || error?.message || "Preview failed");
+      if (error || data?.error) throw new Error(data?.error || (await functionErrorMessage(error, "Preview failed")));
       setPreviewRows((data?.rows as CycleRow[]) || []);
       setShowPreviewDialog(true);
     } catch (err) {
@@ -343,7 +344,7 @@ export default function AdminPayouts() {
     setOpeningCycle(true);
     try {
       const { data, error } = await supabase.functions.invoke("payout-cycle", { body: { dryRun: false } });
-      if (error || data?.error) throw new Error(data?.error || error?.message || "Could not open payouts");
+      if (error || data?.error) throw new Error(data?.error || (await functionErrorMessage(error, "Could not open payouts")));
       const rows = (data?.rows as CycleRow[]) || [];
       const opened = rows.filter((r) => r.action === "opened").length;
       if (opened > 0) {
