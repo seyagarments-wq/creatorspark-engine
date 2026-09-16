@@ -114,7 +114,7 @@ export function CreatorOnboarding() {
         {
           id: "video",
           title: "Submit your first video",
-          description: "Upload a video to start earning commissions",
+          description: "Upload your first video. Every approved video gets paid.",
           icon: <Upload className="w-5 h-5" />,
           action: "Submit Video",
           link: "/creator/submit",

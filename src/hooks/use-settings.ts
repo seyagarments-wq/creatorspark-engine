@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { DEFAULT_UPLOAD_WEEKDAY, isWeekday, type Weekday } from "@/lib/upload-day";
+import { DEFAULT_PAY_RATES, normalizePayRates, type PayRates } from "../../supabase/functions/_shared/payout-math";
 
 interface CommissionSettings {
   default: number;
@@ -47,6 +48,8 @@ interface AppSettings {
   notifications: NotificationSettings;
   analytics: AnalyticsSettings;
   upload_schedule: UploadScheduleSettings;
+  /** $ per approved non-bounty video + bonus bands on attributed revenue. Key `pay_rates`. */
+  pay_rates: PayRates;
 }
 
 const defaultSettings: AppSettings = {
@@ -59,6 +62,7 @@ const defaultSettings: AppSettings = {
     creator_metrics: { impressions: true, link_clicks: true, link_ctr: false, conversions: true, aov: false },
   },
   upload_schedule: { weekday: DEFAULT_UPLOAD_WEEKDAY },
+  pay_rates: DEFAULT_PAY_RATES,
 };
 
 export function useSettings() {
@@ -91,6 +95,9 @@ export function useSettings() {
               weekday: isWeekday(weekday) ? weekday : DEFAULT_UPLOAD_WEEKDAY,
             };
           }
+          if (row.key === "pay_rates") {
+            settingsMap.pay_rates = normalizePayRates(row.value);
+          }
         });
         setSettings({ ...defaultSettings, ...settingsMap });
       }
@@ -121,7 +128,7 @@ export function useSettings() {
     }
   }
 
-  async function saveAllSettings(newSettings: AppSettings): Promise<boolean> {
+  async function saveAllSettings(newSettings: Partial<AppSettings>): Promise<boolean> {
     try {
       const updates = Object.entries(newSettings).map(([key, value]) => ({
         key,
@@ -136,7 +143,7 @@ export function useSettings() {
         if (error) throw error;
       }
 
-      setSettings(newSettings);
+      setSettings((prev) => ({ ...prev, ...newSettings }));
       return true;
     } catch (error) {
       console.error("Error saving settings:", error);

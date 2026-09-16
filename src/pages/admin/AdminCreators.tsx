@@ -7,14 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -24,7 +16,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -45,9 +36,6 @@ import { useAuth } from "@/lib/auth";
 import {
   Users,
   Search,
-  Video,
-  DollarSign,
-  Settings,
   Loader2,
   UserPlus,
   Mail,
@@ -57,10 +45,7 @@ import {
   CheckCircle,
   Download,
   UserX,
-  UserCheck,
   MoreHorizontal,
-  Calendar,
-  Award,
   Trash2,
   Flame,
   Sun,
@@ -82,8 +67,6 @@ import { CohortManager } from "@/components/admin/CohortManager";
 import { CohortBadge } from "@/components/admin/CohortBadge";
 import { Link } from "react-router-dom";
 import { exportToCSV, formatCurrencyForExport, formatDateForExport } from "@/lib/export";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface CreatorProfile {
@@ -92,22 +75,15 @@ interface CreatorProfile {
   full_name: string;
   email: string;
   avatar_url: string | null;
-  commission_percentage: number;
   created_at: string;
   status: "active" | "suspended" | "inactive";
   videoCount?: number;
   approvedCount?: number;
+  /** Ledger total: accrued + paid video earnings, plus paid bounties. */
   totalEarnings?: number;
   lastVideoDate?: string | null;
   health?: "hot" | "warm" | "cold" | "churned";
   cohorts?: { id: string; name: string; color: string }[];
-}
-
-function getTierFromApprovedCount(count: number): { name: string; class: string } {
-  if (count >= 250) return { name: "Platinum", class: "tier-platinum" };
-  if (count >= 150) return { name: "Gold", class: "tier-gold" };
-  if (count >= 75) return { name: "Silver", class: "tier-silver" };
-  return { name: "Bronze", class: "tier-bronze" };
 }
 
 function getCreatorHealth(lastVideoDate: string | null | undefined): "hot" | "warm" | "cold" | "churned" {
@@ -139,11 +115,6 @@ export default function AdminCreators() {
   const [filteredCreators, setFilteredCreators] = useState<CreatorProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCreator, setSelectedCreator] = useState<CreatorProfile | null>(null);
-  const [commissionDialogOpen, setCommissionDialogOpen] = useState(false);
-  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
-  const [newCommission, setNewCommission] = useState("");
-  const [actionLoading, setActionLoading] = useState(false);
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [showPendingInvites, setShowPendingInvites] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -193,15 +164,21 @@ export default function AdminCreators() {
       // Optimally fetch all related data in batches instead of N+1
       const creatorIds = profiles?.map(p => p.id) || [];
       
-      const [allVideosRes, allPayoutsRes, cohortMembersRes, cohortsRes] = await Promise.all([
+      const [allVideosRes, earningsRes, bountyPayoutsRes, cohortMembersRes, cohortsRes] = await Promise.all([
         supabase
           .from("videos")
           .select("id, creator_id, status, created_at")
           .in("creator_id", creatorIds),
         supabase
+          .from("video_earnings")
+          .select("amount, creator_id")
+          .in("status", ["accrued", "paid"])
+          .in("creator_id", creatorIds),
+        supabase
           .from("payouts")
           .select("amount, creator_id")
           .eq("status", "paid")
+          .eq("payout_type", "bounty")
           .in("creator_id", creatorIds),
         supabase
           .from("creator_cohort_members")
@@ -213,16 +190,16 @@ export default function AdminCreators() {
       ]);
 
       const allVideos = allVideosRes.data || [];
-      const allPayouts = allPayoutsRes.data || [];
+      const ledgerRows = [...(earningsRes.data || []), ...(bountyPayoutsRes.data || [])];
       const cohortMembers = cohortMembersRes.data || [];
       const cohortsData = cohortsRes.data || [];
-      setAllCohorts(cohortsData as any);
+      setAllCohorts(cohortsData);
 
       // Build cohort map per creator
       const cohortMap: Record<string, { id: string; name: string; color: string }[]> = {};
-      const cohortLookup: Record<string, any> = {};
-      cohortsData.forEach((c: any) => { cohortLookup[c.id] = c; });
-      cohortMembers.forEach((m: any) => {
+      const cohortLookup: Record<string, { id: string; name: string; color: string }> = {};
+      cohortsData.forEach((c) => { cohortLookup[c.id] = c; });
+      cohortMembers.forEach((m) => {
         if (!cohortMap[m.creator_id]) cohortMap[m.creator_id] = [];
         if (cohortLookup[m.cohort_id]) {
           cohortMap[m.creator_id].push(cohortLookup[m.cohort_id]);
@@ -231,11 +208,12 @@ export default function AdminCreators() {
 
       const creatorsWithStats = (profiles || []).map((profile) => {
         const creatorVideos = allVideos.filter(v => v.creator_id === profile.id);
-        const creatorPayouts = allPayouts.filter(p => p.creator_id === profile.id);
-        
+
         const videoCount = creatorVideos.length;
         const approvedCount = creatorVideos.filter(v => v.status === "approved").length;
-        const totalEarnings = creatorPayouts.reduce((sum, p) => sum + Number(p.amount), 0);
+        const totalEarnings = ledgerRows
+          .filter(r => r.creator_id === profile.id)
+          .reduce((sum, r) => sum + Number(r.amount), 0);
         
         // Find latest video
         const lastVideo = creatorVideos.sort((a, b) => 
@@ -288,48 +266,6 @@ export default function AdminCreators() {
     setFilteredCreators(filtered);
   }
 
-  async function handleUpdateCommission() {
-    if (!selectedCreator) return;
-
-    const commission = parseFloat(newCommission);
-    if (isNaN(commission) || commission < 0 || commission > 100) {
-      toast({
-        title: "Invalid commission",
-        description: "Please enter a value between 0 and 100",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setActionLoading(true);
-    try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ commission_percentage: commission })
-        .eq("id", selectedCreator.id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Commission updated",
-        description: `${selectedCreator.full_name}'s commission is now ${commission}%`,
-      });
-
-      setCommissionDialogOpen(false);
-      setSelectedCreator(null);
-      setNewCommission("");
-      fetchCreators();
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  }
-
   async function handleImpersonate(creator: CreatorProfile) {
     try {
       toast({ title: "Generating login link…", description: "Please wait" });
@@ -346,8 +282,12 @@ export default function AdminCreators() {
       } else {
         throw new Error(data?.error || "No URL returned");
       }
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Could not generate a login link",
+        variant: "destructive",
+      });
     }
   }
 
@@ -386,10 +326,10 @@ export default function AdminCreators() {
       });
       
       navigate(`/admin/chat?dm=${dm.id}&name=${encodeURIComponent(creator.full_name)}`);
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: "Error",
-        description: error.message,
+        description: error instanceof Error ? error.message : "Could not start the conversation",
         variant: "destructive",
       });
     }
@@ -421,10 +361,10 @@ export default function AdminCreators() {
       setDeleteDialogOpen(false);
       setCreatorToDelete(null);
       fetchCreators();
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: "Error",
-        description: error.message || "Failed to delete creator",
+        description: error instanceof Error ? error.message : "Failed to delete creator",
         variant: "destructive",
       });
     } finally {
@@ -448,10 +388,10 @@ export default function AdminCreators() {
         title: "Warning sent",
         description: `${creator.full_name} has been warned and all creators notified.`,
       });
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: "Error",
-        description: error.message || "Failed to send warning",
+        description: error instanceof Error ? error.message : "Failed to send warning",
         variant: "destructive",
       });
     }
@@ -505,21 +445,17 @@ export default function AdminCreators() {
                 const exportData = creators.map((c) => ({
                   name: c.full_name,
                   email: c.email,
-                  tier: getTierFromApprovedCount(c.approvedCount || 0).name,
                   videos_submitted: c.videoCount || 0,
                   videos_approved: c.approvedCount || 0,
                   total_earnings: formatCurrencyForExport(c.totalEarnings || 0),
-                  commission_rate: `${c.commission_percentage}%`,
                   joined: formatDateForExport(c.created_at),
                 }));
                 exportToCSV(exportData, "creators_export", [
                   { key: "name", header: "Name" },
                   { key: "email", header: "Email" },
-                  { key: "tier", header: "Tier" },
                   { key: "videos_submitted", header: "Videos Submitted" },
                   { key: "videos_approved", header: "Videos Approved" },
                   { key: "total_earnings", header: "Total Earnings" },
-                  { key: "commission_rate", header: "Commission Rate" },
                   { key: "joined", header: "Joined Date" },
                 ]);
                 toast({ title: "Export complete", description: "Creator list downloaded as CSV" });
@@ -634,17 +570,15 @@ export default function AdminCreators() {
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="w-[250px]">Creator</TableHead>
                   <TableHead>Health</TableHead>
-                  <TableHead>Tier</TableHead>
                   <TableHead className="text-right">Approved Videos</TableHead>
-                  <TableHead className="text-right">Earnings</TableHead>
-                  <TableHead className="text-right">Commission</TableHead>
+                  <TableHead className="text-right">Earned</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">
+                    <TableCell colSpan={5} className="h-24 text-center">
                       <div className="flex items-center justify-center">
                         <Loader2 className="w-6 h-6 animate-spin text-primary" />
                         <span className="ml-2 text-muted-foreground">Loading creators...</span>
@@ -653,13 +587,12 @@ export default function AdminCreators() {
                   </TableRow>
                 ) : filteredCreators.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                       No creators found
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredCreators.map((creator) => {
-                    const tier = getTierFromApprovedCount(creator.approvedCount || 0);
                     const healthBadge = getHealthBadge(creator.health || "unknown");
                     const HealthIcon = healthBadge.icon;
 
@@ -700,9 +633,6 @@ export default function AdminCreators() {
                             {healthBadge.label}
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          <Badge className={`${tier.class} text-[10px]`}>{tier.name}</Badge>
-                        </TableCell>
                         <TableCell className="text-right">
                           <div className="flex flex-col items-end">
                             <span className="font-medium">{creator.approvedCount}</span>
@@ -713,11 +643,6 @@ export default function AdminCreators() {
                         </TableCell>
                         <TableCell className="text-right font-medium text-success">
                           {formatCurrency(creator.totalEarnings || 0)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Badge variant="secondary" className="font-mono">
-                            {creator.commission_percentage}%
-                          </Badge>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1.5">
@@ -753,23 +678,13 @@ export default function AdminCreators() {
                                 <MessageSquare className="w-4 h-4 mr-2" />
                                 Message
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setSelectedCreator(creator);
-                                  setNewCommission(creator.commission_percentage.toString());
-                                  setCommissionDialogOpen(true);
-                                }}
-                              >
-                                <DollarSign className="w-4 h-4 mr-2" />
-                                Set Commission
-                              </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 className="text-amber-500 focus:text-amber-500"
                                 onClick={() => handleWarnCreator(creator)}
                               >
                                 <UserX className="w-4 h-4 mr-2" />
-                                Warn — At Risk
+                                Warn: at risk
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 className="text-destructive focus:text-destructive"
@@ -807,43 +722,6 @@ export default function AdminCreators() {
             </div>
           </TabsContent>
         </Tabs>
-
-        {/* Commission Dialog */}
-        <Dialog open={commissionDialogOpen} onOpenChange={setCommissionDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Update Commission Rate</DialogTitle>
-              <DialogDescription>
-                Set the commission percentage for {selectedCreator?.full_name}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="py-4">
-              <div className="flex items-center gap-4">
-                <Label htmlFor="commission" className="w-24">
-                  Rate (%)
-                </Label>
-                <Input
-                  id="commission"
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={newCommission}
-                  onChange={(e) => setNewCommission(e.target.value)}
-                  className="flex-1"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setCommissionDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleUpdateCommission} disabled={actionLoading}>
-                {actionLoading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                Update
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         {/* Invite Dialog */}
         <InviteCreatorDialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen} />

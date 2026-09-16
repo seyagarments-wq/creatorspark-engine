@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { functionErrorMessage } from "@/lib/function-error";
 import { batchFetchAll } from "@/lib/batch-fetch";
 import AdminLayout from "@/components/layout/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -38,48 +39,64 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { DollarSign, Search, CheckCircle, Clock, XCircle, Loader2, AlertCircle, Calculator, Award, Zap, Download, TrendingUp, HandCoins } from "lucide-react";
+import {
+  DollarSign,
+  Search,
+  CheckCircle,
+  Clock,
+  XCircle,
+  Loader2,
+  AlertCircle,
+  Download,
+  HandCoins,
+  Eye,
+  CalendarClock,
+  Zap,
+  Banknote,
+} from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { exportToCSV, formatCurrencyForExport, formatDateForExport } from "@/lib/export";
+
+type PayoutStatus = "pending" | "approved" | "paid" | "rejected";
+
+interface PayoutCreator {
+  full_name: string;
+  email: string;
+  stripe_onboarding_complete: boolean | null;
+  payout_method: string | null;
+  paypal_email: string | null;
+}
 
 interface PayoutWithCreator {
   id: string;
   creator_id: string;
   amount: number;
   payout_type: string;
-  status: "pending" | "approved" | "paid" | "rejected";
+  status: PayoutStatus;
   notes: string | null;
   created_at: string;
   paid_at: string | null;
   stripe_transfer_id: string | null;
-  creator: {
-    full_name: string;
-    email: string;
-    stripe_onboarding_complete: boolean;
-  } | null;
+  paypal_batch_id: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  video_count: number | null;
+  creator: PayoutCreator | null;
 }
 
-interface PayoutCalculationResult {
-  creatorId: string;
-  creatorName: string;
-  approvedVideosCount: number;
-  eligibleForGuarantee: boolean;
-  guaranteeAmount: number;
-  status: "pending_approval" | "skipped" | "already_exists";
-  reason?: string;
-}
-
-interface CalculationSummary {
-  month: string;
-  summary: {
-    creatorsProcessed: number;
-    pendingApprovals: number;
-    eligible: number;
-    skipped: number;
-    alreadyExists: number;
-  };
-  results: PayoutCalculationResult[];
+/** One row of `payout-cycle` output (mirrors open_due_payouts in SQL). */
+interface CycleRow {
+  creator_id: string;
+  creator_name: string;
+  period_start: string;
+  period_end: string;
+  video_count: number;
+  video_pay: number;
+  attributed_revenue: number;
+  bonus_rate: number;
+  bonus_pay: number;
+  action: "would open" | "opened" | "nothing to pay" | string;
 }
 
 interface BulkPayoutResult {
@@ -100,15 +117,89 @@ interface BulkPayoutSummary {
   results: BulkPayoutResult[];
 }
 
-interface AccruedCommission {
-  creator_id: string;
-  full_name: string;
-  commission_percentage: number;
-  week_revenue: number;
-  accrued_commission: number;
-  stripe_onboarding_complete: boolean;
-  payout_method: string;
-  paypal_email: string | null;
+interface DueGroup {
+  creatorId: string;
+  creator: PayoutCreator | null;
+  rows: PayoutWithCreator[];
+  total: number;
+}
+
+interface Rail {
+  label: "Stripe" | "PayPal";
+  ready: boolean;
+  detail: string;
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  video_pay: "Video pay",
+  bonus: "Bonus",
+  bounty: "Bounty",
+};
+
+const typeLabel = (type: string) => TYPE_LABELS[type] ?? type;
+
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
+
+const sumAmounts = (rows: PayoutWithCreator[]) => rows.reduce((sum, p) => sum + Number(p.amount), 0);
+
+const isUnpaid = (p: PayoutWithCreator) => p.status === "pending" || p.status === "approved";
+
+function formatPeriod(start: string | null, end: string | null): string | null {
+  if (!start || !end) return null;
+  const s = parseISO(start);
+  const e = parseISO(end);
+  const startPattern = s.getFullYear() === e.getFullYear() ? "MMM d" : "MMM d, yyyy";
+  return `${format(s, startPattern)} to ${format(e, "MMM d, yyyy")}`;
+}
+
+function railFor(creator: PayoutCreator | null): Rail {
+  if (creator?.payout_method === "paypal") {
+    return {
+      label: "PayPal",
+      ready: !!creator.paypal_email,
+      detail: creator.paypal_email || "No PayPal email on file",
+    };
+  }
+  return {
+    label: "Stripe",
+    ready: !!creator?.stripe_onboarding_complete,
+    detail: creator?.stripe_onboarding_complete ? "Connected" : "Stripe not connected",
+  };
+}
+
+function RailBadge({ rail }: { rail: Rail }) {
+  return (
+    <Badge
+      variant="outline"
+      className={`gap-1 ${rail.ready ? "text-success border-success/30" : "text-destructive border-destructive/30"}`}
+    >
+      {rail.ready ? <CheckCircle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+      {rail.label} {rail.ready ? "ready" : "not set up"}
+    </Badge>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const config: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Clock }> = {
+    pending: { variant: "secondary", icon: Clock },
+    approved: { variant: "outline", icon: CheckCircle },
+    paid: { variant: "default", icon: CheckCircle },
+    rejected: { variant: "destructive", icon: XCircle },
+  };
+  const { variant, icon: Icon } = config[status] || config.pending;
+  return (
+    <Badge variant={variant} className="gap-1 capitalize">
+      <Icon className="w-3 h-3" />
+      {status}
+    </Badge>
+  );
+}
+
+function CycleActionBadge({ action }: { action: string }) {
+  if (action === "opened") return <Badge className="gap-1"><CheckCircle className="w-3 h-3" />Opened</Badge>;
+  if (action === "would open") return <Badge variant="secondary" className="gap-1"><Clock className="w-3 h-3" />Would open</Badge>;
+  return <Badge variant="outline" className="text-muted-foreground">Nothing to pay</Badge>;
 }
 
 export default function AdminPayouts() {
@@ -118,26 +209,24 @@ export default function AdminPayouts() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [stats, setStats] = useState({
-    pending: 0,
-    pendingAmount: 0,
+    unpaid: 0,
+    unpaidAmount: 0,
     paidThisMonth: 0,
+    totalPaid: 0,
   });
   const [processingPayoutId, setProcessingPayoutId] = useState<string | null>(null);
-  const [calculating, setCalculating] = useState(false);
-  const [calculationResult, setCalculationResult] = useState<CalculationSummary | null>(null);
-  const [showCalculationDialog, setShowCalculationDialog] = useState(false);
   const [processingBulk, setProcessingBulk] = useState(false);
   const [bulkResult, setBulkResult] = useState<BulkPayoutSummary | null>(null);
   const [showBulkDialog, setShowBulkDialog] = useState(false);
-  const [accruedCommissions, setAccruedCommissions] = useState<AccruedCommission[]>([]);
-  const [weekDates, setWeekDates] = useState<{ start: string; end: string } | null>(null);
-  const [payingCreatorId, setPayingCreatorId] = useState<string | null>(null);
-  const [manualPayCreator, setManualPayCreator] = useState<AccruedCommission | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewRows, setPreviewRows] = useState<CycleRow[] | null>(null);
+  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
+  const [openingCycle, setOpeningCycle] = useState(false);
   const [markingManual, setMarkingManual] = useState(false);
   const [manualPayoutId, setManualPayoutId] = useState<string | null>(null);
+
   useEffect(() => {
     fetchPayouts();
-    fetchAccruedCommissions();
   }, []);
 
   async function fetchPayouts() {
@@ -147,33 +236,26 @@ export default function AdminPayouts() {
           .from("payouts")
           .select(`
             *,
-            creator:creator_id(full_name, email, stripe_onboarding_complete)
+            creator:creator_id(full_name, email, stripe_onboarding_complete, payout_method, paypal_email)
           `)
           .order("created_at", { ascending: false })
           .range(from, to)
       );
 
-      const payoutsData = (data || []).map((p: any) => ({
-        ...p,
-        creator: p.creator,
-      }));
+      const rows = (data || []) as unknown as PayoutWithCreator[];
+      setPayouts(rows);
 
-      setPayouts(payoutsData);
-
-      // Calculate stats
-      const pending = payoutsData.filter((p) => p.status === "pending");
-      const thisMonth = new Date();
-      thisMonth.setDate(1);
-      thisMonth.setHours(0, 0, 0, 0);
-
-      const paidThisMonth = payoutsData
-        .filter((p) => p.status === "paid" && p.paid_at && new Date(p.paid_at) >= thisMonth)
-        .reduce((sum, p) => sum + Number(p.amount), 0);
+      const unpaid = rows.filter(isUnpaid);
+      const paid = rows.filter((p) => p.status === "paid");
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
 
       setStats({
-        pending: pending.length,
-        pendingAmount: pending.reduce((sum, p) => sum + Number(p.amount), 0),
-        paidThisMonth,
+        unpaid: unpaid.length,
+        unpaidAmount: sumAmounts(unpaid),
+        paidThisMonth: sumAmounts(paid.filter((p) => p.paid_at && new Date(p.paid_at) >= monthStart)),
+        totalPaid: sumAmounts(paid),
       });
     } catch (error) {
       console.error("Error fetching payouts:", error);
@@ -183,361 +265,205 @@ export default function AdminPayouts() {
     }
   }
 
-  async function fetchAccruedCommissions() {
+  async function updatePayoutStatus(id: string, status: PayoutStatus) {
     try {
-      // Get payout threshold from settings
-      const { data: thresholdSetting } = await supabase
-        .from("settings")
-        .select("value")
-        .eq("key", "payout_threshold")
-        .single();
-      
-      const minimumPayout = (thresholdSetting?.value as any)?.minimum ?? 50;
-
-      // Get all creators with their Stripe info
-      const { data: creators } = await supabase
-        .from("profiles")
-        .select("id, full_name, commission_percentage, stripe_account_id, stripe_onboarding_complete, user_id, payout_method, paypal_email");
-
-      if (!creators) return;
-
-      // Filter to only creators
-      const creatorProfiles = [];
-      for (const profile of creators) {
-        const { data: roleCheck } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", profile.user_id)
-          .eq("role", "creator")
-          .single();
-        
-        if (roleCheck) {
-          creatorProfiles.push(profile);
-        }
-      }
-
-      const accrued: AccruedCommission[] = [];
-
-      for (const creator of creatorProfiles) {
-        // Get approved videos
-        const { data: videos } = await supabase
-          .from("videos")
-          .select("id")
-          .eq("creator_id", creator.id)
-          .eq("status", "approved");
-
-        if (!videos || videos.length === 0) continue;
-
-        const videoIds = videos.map(v => v.id);
-
-        // Get the effective date of the last paid commission payout for this creator
-        const { data: lastPayout } = await supabase
-          .from("payouts")
-          .select("paid_at, created_at")
-          .eq("creator_id", creator.id)
-          .eq("payout_type", "commission")
-          .eq("status", "paid")
-          .order("paid_at", { ascending: false, nullsFirst: false })
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .single();
-
-        const effectivePaidAt = lastPayout?.paid_at ?? lastPayout?.created_at;
-        const lastPayoutDate = effectivePaidAt
-          ? new Date(effectivePaidAt).toISOString().split("T")[0]
-          : null;
-
-        // Get ALL unpaid performance data (cumulative since last payout)
-        const perfData = await batchFetchAll((from, to) => {
-          let q = supabase
-            .from("performance_data")
-            .select("revenue, commission_rate_at_time")
-            .in("video_id", videoIds);
-          if (lastPayoutDate) {
-            q = q.gt("metric_date", lastPayoutDate);
-          }
-          return q.range(from, to);
-        });
-
-        // Calculate commission using stored daily rates
-        const defaultRate = creator.commission_percentage || 10;
-        let totalRevenue = 0;
-        let totalCommission = 0;
-        
-        (perfData || []).forEach((row) => {
-          const rev = parseFloat((row.revenue as any) || "0");
-          const rate = row.commission_rate_at_time ?? defaultRate;
-          totalRevenue += rev;
-          totalCommission += rev * (rate / 100);
-        });
-
-        const roundedCommission = Math.round(totalCommission * 100) / 100;
-
-        // Show all creators with accrued commissions
-        if (roundedCommission > 0) {
-          accrued.push({
-            creator_id: creator.id,
-            full_name: creator.full_name,
-            commission_percentage: defaultRate,
-            week_revenue: totalRevenue,
-            accrued_commission: roundedCommission,
-            stripe_onboarding_complete: creator.stripe_onboarding_complete || false,
-            payout_method: (creator as any).payout_method || "stripe",
-            paypal_email: (creator as any).paypal_email || null,
-          });
-        }
-      }
-
-      setAccruedCommissions(accrued.sort((a, b) => b.accrued_commission - a.accrued_commission));
-      
-      // Set week dates to show "Cumulative" instead of a specific week
-      setWeekDates({
-        start: "Cumulative",
-        end: "(since last payout)",
-      });
-    } catch (error) {
-      console.error("Error fetching accrued commissions:", error);
-    }
-  }
-
-  async function updatePayoutStatus(id: string, status: string) {
-    try {
-      const { error } = await supabase.from("payouts").update({ status: status as any }).eq("id", id);
-
+      const { error } = await supabase.from("payouts").update({ status }).eq("id", id);
       if (error) throw error;
       toast.success(`Payout ${status}`);
       fetchPayouts();
     } catch (error) {
       console.error("Error updating payout:", error);
-      toast.error("Failed to update payout");
+      toast.error(error instanceof Error ? error.message : "Failed to update payout");
     }
   }
 
-  async function processStripePayout(payoutId: string) {
-    const targetPayout = payouts.find(p => p.id === payoutId);
-    
-    if (targetPayout && !targetPayout.creator?.stripe_onboarding_complete) {
-      toast.error("This creator hasn't connected Stripe yet.");
+  async function processPayout(payout: PayoutWithCreator) {
+    const rail = railFor(payout.creator);
+    const name = payout.creator?.full_name || "This creator";
+    if (!rail.ready) {
+      toast.error(`${name} has not finished ${rail.label} setup yet.`);
       return;
     }
 
-    // Optimistic: update UI instantly
-    setPayouts(prev => prev.map(p => p.id === payoutId ? { ...p, status: "paid" as const, paid_at: new Date().toISOString() } : p));
-    toast.success(`Processing payout for ${targetPayout?.creator?.full_name}...`);
-
-    // Background: call edge function
-    supabase.functions.invoke("process-payout", {
-      body: { payout_id: payoutId },
-    }).then(({ data, error }) => {
-      if (error || data?.error) {
-        // Revert on failure
-        setPayouts(prev => prev.map(p => p.id === payoutId ? { ...p, status: "pending" as const, paid_at: null } : p));
-        toast.error(data?.error || error?.message || "Payout failed — reverted");
-      } else {
-        toast.success(`Payout confirmed! Transfer: ${data.transfer_id}`);
-      }
-    });
-  }
-
-  async function calculateMonthlyPayouts() {
-    setCalculating(true);
+    setProcessingPayoutId(payout.id);
     try {
-      const { data, error } = await supabase.functions.invoke("calculate-monthly-payouts", {
-        body: {},
+      const { data, error } = await supabase.functions.invoke("process-payout", {
+        body: { payout_id: payout.id },
       });
-
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-
-      setCalculationResult(data);
-      setShowCalculationDialog(true);
-      toast.success(`Calculated payouts for ${data.summary.creatorsProcessed} creators`);
-      fetchPayouts();
-    } catch (error: any) {
-      console.error("Error calculating payouts:", error);
-      toast.error(error.message || "Failed to calculate monthly payouts");
+      if (error || data?.error) throw new Error(data?.error || (await functionErrorMessage(error, "Payout failed")));
+      toast.success(`Paid ${formatCurrency(Number(payout.amount))} to ${name} via ${rail.label}`);
+      await fetchPayouts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Payout failed");
     } finally {
-      setCalculating(false);
+      setProcessingPayoutId(null);
     }
   }
 
   async function processBulkPayouts() {
-    // Optimistic: mark all pending as paid instantly
-    const pendingCount = payouts.filter(p => p.status === "pending").length;
-    const originalPayouts = [...payouts];
-    setPayouts(prev => prev.map(p => p.status === "pending" ? { ...p, status: "paid" as const, paid_at: new Date().toISOString() } : p));
-    toast.success(`Processing ${pendingCount} payouts in background...`);
+    setProcessingBulk(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("process-bulk-payouts", { body: {} });
+      if (error || data?.error) throw new Error(data?.error || (await functionErrorMessage(error, "Bulk pay failed")));
 
-    // Background: call edge function (now handles ALL pending including commissions)
-    supabase.functions.invoke("process-bulk-payouts", {
-      body: { include_commissions: true },
-    }).then(({ data, error }) => {
-      if (error || data?.error) {
-        setPayouts(originalPayouts);
-        toast.error(data?.error || error?.message || "Bulk processing failed — reverted");
+      const summary = data as BulkPayoutSummary;
+      setBulkResult(summary);
+      setShowBulkDialog(true);
+      if (summary.processed === 0) {
+        toast.info("Nothing ready to pay right now");
+      } else if (summary.failed > 0) {
+        toast.warning(`${summary.failed} of ${summary.processed} payouts failed`);
       } else {
-        setBulkResult(data);
-        setShowBulkDialog(true);
-        if (data.successful > 0) {
-          toast.success(`✅ Paid ${data.successful} payouts totaling $${data.total_amount?.toFixed(2) || 0}`);
-        } else if (data.processed === 0) {
-          toast.info("No pending payouts to process");
-          setPayouts(originalPayouts);
-        } else {
-          toast.warning(`${data.failed} payouts failed`);
-        }
-        fetchPayouts();
+        toast.success(
+          `Paid ${summary.successful} payout${summary.successful === 1 ? "" : "s"} totalling ${formatCurrency(summary.total_amount || 0)}`
+        );
       }
-    });
+      await fetchPayouts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Bulk pay failed");
+    } finally {
+      setProcessingBulk(false);
+    }
   }
 
-  async function payAccruedCommission(creatorId: string, creatorName: string, payoutMethod: string) {
-    // Optimistic: remove from accrued list instantly
-    const creatorEntry = accruedCommissions.find(c => c.creator_id === creatorId);
-    setAccruedCommissions(prev => prev.filter(c => c.creator_id !== creatorId));
-    
-    const functionName = payoutMethod === "paypal" ? "pay-paypal-commission" : "pay-accrued-commission";
-    const methodLabel = payoutMethod === "paypal" ? "PayPal" : "Stripe";
-    toast.success(`Processing ${methodLabel} commission for ${creatorName}...`);
-
-    // Background: call appropriate edge function
-    supabase.functions.invoke(functionName, {
-      body: { creator_id: creatorId },
-    }).then(({ data, error }) => {
-      if (error || data?.error) {
-        // Revert on failure
-        if (creatorEntry) {
-          setAccruedCommissions(prev => [...prev, creatorEntry].sort((a, b) => b.accrued_commission - a.accrued_commission));
-        }
-        toast.error(data?.error || error?.message || `${methodLabel} commission payout failed — reverted`);
-      } else {
-        toast.success(`Paid $${data.amount?.toFixed(2)} to ${creatorName} via ${methodLabel}`);
-        fetchPayouts(); // refresh payout history in background
-      }
-    });
+  async function previewNextRun() {
+    setPreviewing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("payout-cycle", { body: { dryRun: true } });
+      if (error || data?.error) throw new Error(data?.error || (await functionErrorMessage(error, "Preview failed")));
+      setPreviewRows((data?.rows as CycleRow[]) || []);
+      setShowPreviewDialog(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Preview failed");
+    } finally {
+      setPreviewing(false);
+    }
   }
 
-  async function markManualPayment(creator: AccruedCommission) {
+  async function openDuePayouts() {
+    setOpeningCycle(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("payout-cycle", { body: { dryRun: false } });
+      if (error || data?.error) throw new Error(data?.error || (await functionErrorMessage(error, "Could not open payouts")));
+      const rows = (data?.rows as CycleRow[]) || [];
+      const opened = rows.filter((r) => r.action === "opened").length;
+      if (opened > 0) {
+        toast.success(`Opened ${opened} pay period${opened === 1 ? "" : "s"}. Review them under Due now.`);
+      } else {
+        toast.info("No completed pay periods to open.");
+      }
+      await fetchPayouts();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not open payouts");
+    } finally {
+      setOpeningCycle(false);
+    }
+  }
+
+  async function markManualPaid() {
+    if (!manualPayoutId) return;
     setMarkingManual(true);
     try {
-      // Duplicate-protection: re-check if a paid commission was just recorded
-      const { data: recentPaid } = await supabase
+      const { error } = await supabase
         .from("payouts")
-        .select("id, paid_at, created_at")
-        .eq("creator_id", creator.creator_id)
-        .eq("payout_type", "commission")
-        .eq("status", "paid")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
-
-      if (recentPaid) {
-        const boundary = new Date(recentPaid.paid_at ?? recentPaid.created_at);
-        const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
-        if (boundary > twoMinutesAgo) {
-          toast.error("A payment was just recorded for this creator. Please refresh and verify before adding another.");
-          setManualPayCreator(null);
-          setMarkingManual(false);
-          fetchAccruedCommissions();
-          return;
-        }
-      }
-
-      const { error } = await supabase.from("payouts").insert({
-        creator_id: creator.creator_id,
-        amount: creator.accrued_commission,
-        payout_type: "commission",
-        status: "paid" as any,
-        paid_at: new Date().toISOString(),
-        notes: "Manual payment - paid outside Stripe",
-      });
-
+        .update({
+          status: "paid",
+          paid_at: new Date().toISOString(),
+          notes: "Paid outside the app. Marked paid manually by an admin.",
+        })
+        .eq("id", manualPayoutId);
       if (error) throw error;
-
-      toast.success(`Marked $${creator.accrued_commission.toFixed(2)} as manually paid for ${creator.full_name}`);
-      setManualPayCreator(null);
+      toast.success("Payout marked as paid");
+      setManualPayoutId(null);
       fetchPayouts();
-      fetchAccruedCommissions();
-
-      // Send payout notification email to creator
-      try {
-        const { data: creatorProfile } = await supabase
-          .from("profiles")
-          .select("user_id")
-          .eq("id", creator.creator_id)
-          .single();
-
-        if (creatorProfile?.user_id) {
-          supabase.functions.invoke("send-notification-email", {
-            body: {
-              user_id: creatorProfile.user_id,
-              title: "SURVEY SAYS... you're getting paid! 💰",
-              message: `The board has spoken — and your bank account is about to feel the love.\n\nYou've been matched with a payout of <strong>$${creator.accrued_commission.toFixed(2)}</strong>.\n\nSince you're outside the US, this one's coming to you via PayPal. Just drop a message to one of the admins in your DMs so they can get it processed for you.\n\nThat's not a guess. That's real money, earned by your content doing the work while you sleep.\n\nKeep playing. Keep posting. The show rewards those who stay in the game. 🎯`,
-              notification_type: "payout",
-              link: "/creator/payouts",
-              button_text: "View Your Payout",
-            },
-          });
-        }
-      } catch (emailErr) {
-        console.error("Failed to send manual payout email:", emailErr);
-      }
-    } catch (error: any) {
-      console.error("Error marking manual payment:", error);
-      toast.error(error.message || "Failed to record manual payment");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update payout");
     } finally {
       setMarkingManual(false);
     }
   }
 
-  // Count payouts eligible for bulk processing
-  const eligibleForBulkProcess = payouts.filter(
-    (p) => p.status === "pending" && p.creator?.stripe_onboarding_complete
-  ).length;
+  function exportPayouts() {
+    const exportData = payouts.map((p) => ({
+      creator: p.creator?.full_name || "Unknown",
+      email: p.creator?.email || "",
+      type: typeLabel(p.payout_type),
+      period: formatPeriod(p.period_start, p.period_end) || "",
+      videos: p.video_count ?? "",
+      amount: formatCurrencyForExport(Number(p.amount)),
+      status: p.status,
+      date: formatDateForExport(p.created_at),
+      paid_date: p.paid_at ? formatDateForExport(p.paid_at) : "",
+      reference: p.stripe_transfer_id || p.paypal_batch_id || "",
+    }));
+    exportToCSV(exportData, "payouts_export", [
+      { key: "creator", header: "Creator" },
+      { key: "email", header: "Email" },
+      { key: "type", header: "Type" },
+      { key: "period", header: "Period" },
+      { key: "videos", header: "Videos" },
+      { key: "amount", header: "Amount" },
+      { key: "status", header: "Status" },
+      { key: "date", header: "Created Date" },
+      { key: "paid_date", header: "Paid Date" },
+      { key: "reference", header: "Reference" },
+    ]);
+    toast.success("Payout report downloaded as CSV");
+  }
+
+  // Due now: anything unpaid whose pay period has closed (bounties have no period and are due at once).
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const dueRows = payouts.filter((p) => isUnpaid(p) && (!p.period_end || p.period_end < todayStr));
+  const dueTotal = sumAmounts(dueRows);
+  const dueGroups: DueGroup[] = Array.from(
+    dueRows
+      .reduce((map, p) => {
+        const group = map.get(p.creator_id) ?? { creatorId: p.creator_id, creator: p.creator, rows: [], total: 0 };
+        group.rows.push(p);
+        group.total += Number(p.amount);
+        map.set(p.creator_id, group);
+        return map;
+      }, new Map<string, DueGroup>())
+      .values()
+  ).sort((a, b) => b.total - a.total);
+
+  const readyForBulk = payouts.filter((p) => isUnpaid(p) && railFor(p.creator).ready).length;
 
   const filteredPayouts = payouts.filter((payout) => {
+    const q = searchQuery.toLowerCase();
     const matchesSearch =
-      payout.creator?.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      payout.creator?.email?.toLowerCase().includes(searchQuery.toLowerCase());
+      !q ||
+      payout.creator?.full_name?.toLowerCase().includes(q) ||
+      payout.creator?.email?.toLowerCase().includes(q);
     const matchesStatus = statusFilter === "all" || payout.status === statusFilter;
     const matchesType = typeFilter === "all" || payout.payout_type === typeFilter;
     return matchesSearch && matchesStatus && matchesType;
   });
 
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
-
-  const getStatusBadge = (status: string) => {
-    const config: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; icon: typeof Clock }> = {
-      pending: { variant: "secondary", icon: Clock },
-      approved: { variant: "outline", icon: CheckCircle },
-      paid: { variant: "default", icon: CheckCircle },
-      rejected: { variant: "destructive", icon: XCircle },
-    };
-    const { variant, icon: Icon } = config[status] || config.pending;
+  const renderRowActions = (payout: PayoutWithCreator, compact: boolean) => {
+    if (!isUnpaid(payout)) return null;
+    const rail = railFor(payout.creator);
+    const busy = processingPayoutId === payout.id;
+    const size = compact ? "h-7 text-xs" : "";
+    const icon = compact ? "w-3 h-3" : "w-4 h-4";
     return (
-      <Badge variant={variant} className="gap-1">
-        <Icon className="w-3 h-3" />
-        {status}
-      </Badge>
-    );
-  };
-
-  const getTypeBadge = (type: string) => {
-    const isAutomatic = type === "commission";
-    const typeLabels: Record<string, string> = {
-      commission: "Commission",
-      bounty: "Bounty",
-      guarantee: "Guarantee",
-    };
-    return (
-      <div className="flex items-center gap-1.5">
-        <span className="capitalize">{typeLabels[type] || type}</span>
-        {isAutomatic && (
-          <span className="text-[10px] px-1.5 py-0.5 bg-success/10 text-success rounded-full font-medium">
-            Auto
-          </span>
+      <div className={`flex flex-wrap gap-1.5 ${compact ? "" : "justify-end"}`}>
+        <Button size="sm" className={size} onClick={() => processPayout(payout)} disabled={busy || !rail.ready} title={rail.ready ? `Pay via ${rail.label}` : rail.detail}>
+          {busy ? <Loader2 className={`${icon} animate-spin mr-1`} /> : <DollarSign className={`${icon} mr-1`} />}
+          Pay
+        </Button>
+        {payout.status === "pending" && (
+          <Button size="sm" variant="outline" className={size} onClick={() => updatePayoutStatus(payout.id, "approved")}>
+            Approve
+          </Button>
         )}
+        <Button size="sm" variant="outline" className={size} onClick={() => updatePayoutStatus(payout.id, "rejected")}>
+          Reject
+        </Button>
+        <Button size="sm" variant="ghost" className={size} onClick={() => setManualPayoutId(payout.id)} title="Mark as paid outside the app">
+          <HandCoins className={`${icon} mr-1`} />
+          Manual
+        </Button>
       </div>
     );
   };
@@ -546,157 +472,59 @@ export default function AdminPayouts() {
     return (
       <AdminLayout>
         <div className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-3">
-            {[1, 2, 3].map((i) => (
+          <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
               <div key={i} className="h-24 bg-muted/50 rounded-xl animate-pulse" />
             ))}
           </div>
+          <div className="h-48 bg-muted/50 rounded-xl animate-pulse" />
           <div className="h-96 bg-muted/50 rounded-xl animate-pulse" />
         </div>
       </AdminLayout>
     );
   }
 
+  const manualPayout = manualPayoutId ? payouts.find((p) => p.id === manualPayoutId) : null;
+
   return (
     <AdminLayout>
       <div className="space-y-4 md:space-y-6">
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
+        {/* Header */}
+        <div className="flex flex-col gap-3">
+          <div className="flex items-start justify-between gap-3">
             <div>
               <h1 className="text-xl md:text-2xl font-bold">Payouts</h1>
-              <p className="text-sm text-muted-foreground">Manage creator payments</p>
+              <p className="text-sm text-muted-foreground">Review what is due, then press Pay. Nothing pays on its own.</p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="md:hidden"
-              onClick={() => {
-                const exportData = payouts.map((p) => ({
-                  creator: p.creator?.full_name || "Unknown",
-                  email: p.creator?.email || "",
-                  type: p.payout_type,
-                  amount: formatCurrencyForExport(Number(p.amount)),
-                  status: p.status,
-                  date: formatDateForExport(p.created_at),
-                  paid_date: p.paid_at ? formatDateForExport(p.paid_at) : "",
-                }));
-                exportToCSV(exportData, "payouts_export", [
-                  { key: "creator", header: "Creator" },
-                  { key: "email", header: "Email" },
-                  { key: "type", header: "Type" },
-                  { key: "amount", header: "Amount" },
-                  { key: "status", header: "Status" },
-                  { key: "date", header: "Created Date" },
-                  { key: "paid_date", header: "Paid Date" },
-                ]);
-                toast.success("Payout report downloaded as CSV");
-              }}
-            >
+            <Button variant="outline" size="sm" onClick={exportPayouts} className="shrink-0">
               <Download className="w-4 h-4" />
-            </Button>
-          </div>
-          
-          {/* Mobile Action Buttons */}
-          <div className="flex gap-2 md:hidden">
-            <Button 
-              onClick={calculateMonthlyPayouts} 
-              disabled={calculating} 
-              variant="outline"
-              size="sm"
-              className="flex-1"
-            >
-              {calculating ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Calculator className="w-4 h-4" />
-              )}
-              <span className="ml-1.5">Calculate</span>
-            </Button>
-            <Button 
-              onClick={processBulkPayouts} 
-              disabled={processingBulk || stats.pending === 0}
-              size="sm"
-              className="flex-1"
-            >
-              {processingBulk ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Zap className="w-4 h-4" />
-              )}
-              <span className="ml-1.5">Process ({stats.pending})</span>
+              <span className="hidden sm:inline ml-2">Export CSV</span>
             </Button>
           </div>
 
-          {/* Desktop Action Buttons */}
-          <div className="hidden md:flex justify-end gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+            <Button variant="outline" size="sm" onClick={previewNextRun} disabled={previewing}>
+              {previewing ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Eye className="w-4 h-4 mr-1.5" />}
+              Preview next run
+            </Button>
+            <Button variant="outline" size="sm" onClick={openDuePayouts} disabled={openingCycle}>
+              {openingCycle ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <CalendarClock className="w-4 h-4 mr-1.5" />}
+              Open due payouts now
+            </Button>
             <Button
-              variant="outline"
-              onClick={() => {
-                const exportData = payouts.map((p) => ({
-                  creator: p.creator?.full_name || "Unknown",
-                  email: p.creator?.email || "",
-                  type: p.payout_type,
-                  amount: formatCurrencyForExport(Number(p.amount)),
-                  status: p.status,
-                  date: formatDateForExport(p.created_at),
-                  paid_date: p.paid_at ? formatDateForExport(p.paid_at) : "",
-                }));
-                exportToCSV(exportData, "payouts_export", [
-                  { key: "creator", header: "Creator" },
-                  { key: "email", header: "Email" },
-                  { key: "type", header: "Type" },
-                  { key: "amount", header: "Amount" },
-                  { key: "status", header: "Status" },
-                  { key: "date", header: "Created Date" },
-                  { key: "paid_date", header: "Paid Date" },
-                ]);
-                toast.success("Payout report downloaded as CSV");
-              }}
+              size="sm"
+              className="col-span-2 sm:col-span-1"
+              onClick={processBulkPayouts}
+              disabled={processingBulk || readyForBulk === 0}
             >
-              <Download className="w-4 h-4 mr-2" />
-              Export CSV
-            </Button>
-            <Button onClick={calculateMonthlyPayouts} disabled={calculating} variant="outline">
-              {calculating ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : (
-                <Calculator className="w-4 h-4 mr-2" />
-              )}
-              Calculate Payouts
-            </Button>
-            <Button 
-              onClick={processBulkPayouts} 
-              disabled={processingBulk || stats.pending === 0}
-            >
-              {processingBulk ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : (
-                <Zap className="w-4 h-4 mr-2" />
-              )}
-              Process All Pending ({stats.pending})
+              {processingBulk ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : <Zap className="w-4 h-4 mr-1.5" />}
+              Pay all ready ({readyForBulk})
             </Button>
           </div>
         </div>
 
-        {/* Payout Structure Info */}
-        <Card className="bg-muted/30 border-dashed">
-          <CardContent className="p-4">
-            <div className="space-y-3">
-              <div className="flex items-start gap-3">
-                <Clock className="w-5 h-5 text-warning mt-0.5 shrink-0" />
-                <div className="text-sm">
-                  <p className="font-medium text-warning">Requires Approval</p>
-                  <p className="text-muted-foreground">
-                    <strong>Bounties</strong> are created as pending when a creator qualifies. Use "Process All Pending" to pay.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Stats Cards */}
-        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+        {/* Stats */}
+        <div className="grid gap-3 md:gap-4 grid-cols-2 md:grid-cols-4">
           <Card>
             <CardContent className="p-4 md:p-6">
               <div className="flex items-center gap-3 md:gap-4">
@@ -704,8 +532,8 @@ export default function AdminPayouts() {
                   <Clock className="w-4 h-4 md:w-5 md:h-5 text-warning" />
                 </div>
                 <div>
-                  <p className="text-xs md:text-sm text-muted-foreground">Pending</p>
-                  <p className="text-lg md:text-2xl font-bold">{stats.pending}</p>
+                  <p className="text-xs md:text-sm text-muted-foreground">Unpaid</p>
+                  <p className="text-lg md:text-2xl font-bold">{stats.unpaid}</p>
                 </div>
               </div>
             </CardContent>
@@ -717,8 +545,8 @@ export default function AdminPayouts() {
                   <DollarSign className="w-4 h-4 md:w-5 md:h-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-xs md:text-sm text-muted-foreground">Pending $</p>
-                  <p className="text-lg md:text-2xl font-bold">{formatCurrency(stats.pendingAmount)}</p>
+                  <p className="text-xs md:text-sm text-muted-foreground">Unpaid $</p>
+                  <p className="text-lg md:text-2xl font-bold">{formatCurrency(stats.unpaidAmount)}</p>
                 </div>
               </div>
             </CardContent>
@@ -730,7 +558,7 @@ export default function AdminPayouts() {
                   <CheckCircle className="w-4 h-4 md:w-5 md:h-5 text-success" />
                 </div>
                 <div>
-                  <p className="text-xs md:text-sm text-muted-foreground">Paid (Month)</p>
+                  <p className="text-xs md:text-sm text-muted-foreground">Paid this month</p>
                   <p className="text-lg md:text-2xl font-bold">{formatCurrency(stats.paidThisMonth)}</p>
                 </div>
               </div>
@@ -740,201 +568,106 @@ export default function AdminPayouts() {
             <CardContent className="p-4 md:p-6">
               <div className="flex items-center gap-3 md:gap-4">
                 <div className="p-2 md:p-3 rounded-lg bg-success/10">
-                  <Zap className="w-4 h-4 md:w-5 md:h-5 text-success" />
+                  <Banknote className="w-4 h-4 md:w-5 md:h-5 text-success" />
                 </div>
                 <div>
-                  <p className="text-xs md:text-sm text-muted-foreground">Auto-Paid</p>
-                  <p className="text-lg md:text-2xl font-bold">
-                    {payouts.filter(p => p.status === "paid" && p.payout_type === "commission").length}
-                  </p>
+                  <p className="text-xs md:text-sm text-muted-foreground">Total paid</p>
+                  <p className="text-lg md:text-2xl font-bold">{formatCurrency(stats.totalPaid)}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Accrued Commissions */}
-        {accruedCommissions.length > 0 && (
-          <Card className="border-dashed border-primary/50 bg-primary/5">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-primary" />
-                  <CardTitle className="text-base">Accrued Commissions</CardTitle>
-                </div>
-                <Badge variant="secondary" className="text-xs">
-                  {accruedCommissions.filter(c => c.accrued_commission >= 50).length} ready to pay
+        {/* Due now */}
+        <Card className={dueGroups.length > 0 ? "border-primary/40" : ""}>
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle className="text-base">Due now</CardTitle>
+                <CardDescription>
+                  Pay cycles that have closed, grouped by creator. Each line is one payout.
+                </CardDescription>
+              </div>
+              {dueRows.length > 0 && (
+                <Badge variant="secondary" className="shrink-0">
+                  {dueRows.length} line{dueRows.length === 1 ? "" : "s"}, {formatCurrency(dueTotal)}
                 </Badge>
-              </div>
-              <CardDescription>
-                Cumulative unpaid commissions {weekDates?.end ? weekDates.end : ""}.
-                Balances ≥ $50 will auto-pay on Sunday at 6:00 AM UTC.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {/* Mobile view */}
-              <div className="md:hidden space-y-3">
-                {accruedCommissions.map((creator) => (
-                  <div key={creator.creator_id} className="border rounded-lg p-3 bg-background">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <p className="font-medium text-sm">{creator.full_name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {creator.commission_percentage}% commission rate
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className={`font-bold ${creator.accrued_commission >= 50 ? 'text-success' : 'text-warning'}`}>
-                          {formatCurrency(creator.accrued_commission)}
-                        </p>
-                        {creator.accrued_commission >= 50 && (creator.stripe_onboarding_complete || creator.payout_method === "paypal") ? (
-                          <Button 
-                            size="sm" 
-                            className="h-6 text-[10px] mt-1 px-2"
-                            onClick={() => payAccruedCommission(creator.creator_id, creator.full_name, creator.payout_method)}
-                            disabled={payingCreatorId === creator.creator_id}
-                          >
-                            {payingCreatorId === creator.creator_id ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              <>
-                                <DollarSign className="w-3 h-3" />
-                                Pay Now
-                              </>
-                            )}
-                          </Button>
-                        ) : null}
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          className="h-6 text-[10px] mt-1 px-2"
-                          onClick={() => setManualPayCreator(creator)}
-                        >
-                          <HandCoins className="w-3 h-3" />
-                          Manual
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">
-                        Revenue: {formatCurrency(creator.week_revenue)}
-                      </span>
-                      {!creator.stripe_onboarding_complete && (
-                        <Badge variant="outline" className="gap-1 text-xs">
-                          <AlertCircle className="w-3 h-3" />
-                          No Stripe
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="mt-2">
-                      <div className="h-2 bg-muted rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full transition-all ${creator.accrued_commission >= 50 ? 'bg-success' : 'bg-warning'}`}
-                          style={{ width: `${Math.min((creator.accrued_commission / 50) * 100, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              
-              {/* Desktop view */}
-              <div className="hidden md:block rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Creator</TableHead>
-                      <TableHead>Week Revenue</TableHead>
-                      <TableHead>Rate</TableHead>
-                      <TableHead>Accrued</TableHead>
-                      <TableHead>Progress to $50</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {accruedCommissions.map((creator) => (
-                      <TableRow key={creator.creator_id}>
-                        <TableCell className="font-medium">{creator.full_name}</TableCell>
-                        <TableCell>{formatCurrency(creator.week_revenue)}</TableCell>
-                        <TableCell>{creator.commission_percentage}%</TableCell>
-                        <TableCell className={`font-bold ${creator.accrued_commission >= 50 ? 'text-success' : 'text-warning'}`}>
-                          {formatCurrency(creator.accrued_commission)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2 min-w-32">
-                            <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                              <div 
-                                className={`h-full transition-all ${creator.accrued_commission >= 50 ? 'bg-success' : 'bg-warning'}`}
-                                style={{ width: `${Math.min((creator.accrued_commission / 50) * 100, 100)}%` }}
-                              />
-                            </div>
-                            <span className="text-xs text-muted-foreground w-10">
-                              {creator.accrued_commission >= 50 ? '✓' : `${Math.round((creator.accrued_commission / 50) * 100)}%`}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {creator.payout_method === "paypal" && creator.paypal_email ? (
-                            <Badge className="gap-1 bg-blue-500 text-white">
-                              <DollarSign className="w-3 h-3" />
-                              PayPal
-                            </Badge>
-                          ) : creator.accrued_commission >= 50 && creator.stripe_onboarding_complete ? (
-                            <Badge className="gap-1 bg-success text-success-foreground">
-                              <Zap className="w-3 h-3" />
-                              Ready
-                            </Badge>
-                          ) : creator.stripe_onboarding_complete ? (
-                            <Badge variant="outline" className="gap-1 text-muted-foreground">
-                              <CheckCircle className="w-3 h-3" />
-                              Stripe OK
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="gap-1 text-destructive border-destructive/30">
-                              <AlertCircle className="w-3 h-3" />
-                              No Stripe
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex gap-1 justify-end">
-                            {creator.accrued_commission >= 50 && (creator.stripe_onboarding_complete || creator.payout_method === "paypal") ? (
-                              <Button 
-                                size="sm" 
-                                onClick={() => payAccruedCommission(creator.creator_id, creator.full_name, creator.payout_method)}
-                                disabled={payingCreatorId === creator.creator_id}
-                              >
-                                {payingCreatorId === creator.creator_id ? (
-                                  <Loader2 className="w-4 h-4 animate-spin mr-1" />
-                                ) : (
-                                  <DollarSign className="w-4 h-4 mr-1" />
-                                )}
-                                Pay Now
-                              </Button>
-                            ) : null}
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => setManualPayCreator(creator)}
-                            >
-                              <HandCoins className="w-4 h-4 mr-1" />
-                              Mark Manual
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              
-              <p className="text-xs text-muted-foreground mt-3">
-                💡 Commissions are automatically paid every Sunday at 6:00 AM UTC for balances ≥ $50
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {dueGroups.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                Nothing is due. A creator's period opens the day after their 28-day cycle ends.
+                Use Preview next run to see what is coming.
               </p>
-            </CardContent>
-          </Card>
-        )}
+            ) : (
+              dueGroups.map((group) => {
+                const rail = railFor(group.creator);
+                return (
+                  <div key={group.creatorId} className="rounded-lg border p-3 space-y-2 bg-background">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{group.creator?.full_name || "Unknown"}</p>
+                        <p className="text-xs text-muted-foreground truncate">{group.creator?.email}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <RailBadge rail={rail} />
+                        <span className="font-bold text-sm">{formatCurrency(group.total)}</span>
+                      </div>
+                    </div>
+
+                    <div className="divide-y">
+                      {group.rows.map((p) => {
+                        const period = formatPeriod(p.period_start, p.period_end);
+                        const busy = processingPayoutId === p.id;
+                        return (
+                          <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">{typeLabel(p.payout_type)}</span>
+                                <StatusBadge status={p.status} />
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {period ?? `Opened ${format(new Date(p.created_at), "MMM d, yyyy")}`}
+                                {p.payout_type === "video_pay" && p.video_count != null && (
+                                  <>, {p.video_count} video{p.video_count === 1 ? "" : "s"}</>
+                                )}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 ml-auto">
+                              <span className="font-semibold text-sm">{formatCurrency(Number(p.amount))}</span>
+                              <Button
+                                size="sm"
+                                className="h-8"
+                                onClick={() => processPayout(p)}
+                                disabled={busy || !rail.ready}
+                                title={rail.ready ? `Pay via ${rail.label}` : rail.detail}
+                              >
+                                {busy ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <DollarSign className="w-4 h-4 mr-1" />}
+                                Pay
+                              </Button>
+                              <Button size="sm" variant="outline" className="h-8" onClick={() => updatePayoutStatus(p.id, "rejected")}>
+                                Reject
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {!rail.ready && (
+                      <p className="text-xs text-destructive">
+                        {rail.detail}. Pay stays off until they finish setup. If you paid another way, mark it manually in the table below.
+                      </p>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </CardContent>
+        </Card>
 
         {/* Monthly Payout Chart */}
         {(() => {
@@ -956,7 +689,7 @@ export default function AdminPayouts() {
           return (
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-base">Monthly Payouts</CardTitle>
+                <CardTitle className="text-base">Monthly payouts</CardTitle>
                 <CardDescription>Paid amounts over the last 6 months</CardDescription>
               </CardHeader>
               <CardContent>
@@ -964,7 +697,7 @@ export default function AdminPayouts() {
                   {monthlyData.map((m) => (
                     <div key={m.month} className="flex-1 flex flex-col items-center gap-1">
                       <span className="text-[10px] font-medium text-foreground">
-                        {m.total > 0 ? formatCurrency(m.total) : "—"}
+                        {m.total > 0 ? formatCurrency(m.total) : ""}
                       </span>
                       <div
                         className="w-full rounded-t-md bg-primary/80 transition-all min-h-[4px]"
@@ -979,13 +712,13 @@ export default function AdminPayouts() {
           );
         })()}
 
-        {/* Filters */}
+        {/* All payouts */}
         <Card>
           <CardHeader>
-            <CardTitle>All Payouts</CardTitle>
+            <CardTitle>All payouts</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col sm:flex-row gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row gap-3 mb-6">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
@@ -995,29 +728,31 @@ export default function AdminPayouts() {
                   className="pl-9"
                 />
               </div>
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-36">
-                  <SelectValue placeholder="Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="commission">Commission</SelectItem>
-                  <SelectItem value="bounty">Bounty</SelectItem>
-                  <SelectItem value="guarantee">Guarantee</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-36">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="paid">Paid</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="grid grid-cols-2 gap-3 sm:flex">
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger className="sm:w-36">
+                    <SelectValue placeholder="Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All types</SelectItem>
+                    <SelectItem value="video_pay">Video pay</SelectItem>
+                    <SelectItem value="bonus">Bonus</SelectItem>
+                    <SelectItem value="bounty">Bounty</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="sm:w-36">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="approved">Approved</SelectItem>
+                    <SelectItem value="paid">Paid</SelectItem>
+                    <SelectItem value="rejected">Rejected</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {filteredPayouts.length === 0 ? (
@@ -1027,80 +762,45 @@ export default function AdminPayouts() {
               </div>
             ) : (
               <>
-                {/* Mobile Card View */}
+                {/* Mobile cards */}
                 <div className="md:hidden space-y-3">
-                  {filteredPayouts.map((payout) => (
-                    <div key={payout.id} className="border rounded-lg p-3 space-y-2">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="font-medium text-sm">{payout.creator?.full_name || "Unknown"}</p>
-                          <p className="text-xs text-muted-foreground">{payout.creator?.email}</p>
-                        </div>
-                        <p className="font-bold">{formatCurrency(Number(payout.amount))}</p>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          {getTypeBadge(payout.payout_type)}
-                        </div>
-                        {getStatusBadge(payout.status)}
-                      </div>
-                      <div className="flex items-center justify-between pt-2 border-t">
-                        <span className="text-xs text-muted-foreground">
-                          {format(new Date(payout.created_at), "MMM d, yyyy")}
-                        </span>
-                        {payout.status === "pending" && (
-                          <div className="flex gap-2">
-                            <Button size="sm" className="h-7 text-xs" onClick={() => updatePayoutStatus(payout.id, "approved")}>
-                              Approve
-                            </Button>
-                            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => updatePayoutStatus(payout.id, "rejected")}>
-                              Reject
-                            </Button>
+                  {filteredPayouts.map((payout) => {
+                    const period = formatPeriod(payout.period_start, payout.period_end);
+                    return (
+                      <div key={payout.id} className="border rounded-lg p-3 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm truncate">{payout.creator?.full_name || "Unknown"}</p>
+                            <p className="text-xs text-muted-foreground truncate">{payout.creator?.email}</p>
                           </div>
-                        )}
-                        {payout.status === "approved" && (
-                          <div className="flex flex-col items-end gap-1">
-                            <div className="flex gap-1">
-                              <Button 
-                                size="sm" 
-                                className="h-7 text-xs"
-                                onClick={() => processStripePayout(payout.id)}
-                                disabled={processingPayoutId === payout.id}
-                              >
-                                {processingPayoutId === payout.id ? (
-                                  <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                                ) : (
-                                  <DollarSign className="w-3 h-3 mr-1" />
-                                )}
-                                {payout.creator?.stripe_onboarding_complete ? "Pay" : "Retry"}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 text-xs"
-                                onClick={() => setManualPayoutId(payout.id)}
-                              >
-                                <HandCoins className="w-3 h-3 mr-1" />
-                                Manual
-                              </Button>
-                            </div>
-                            {!payout.creator?.stripe_onboarding_complete && (
-                              <span className="text-[10px] text-destructive">No Stripe yet</span>
-                            )}
-                          </div>
+                          <p className="font-bold shrink-0">{formatCurrency(Number(payout.amount))}</p>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm">{typeLabel(payout.payout_type)}</span>
+                          <StatusBadge status={payout.status} />
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {period ?? format(new Date(payout.created_at), "MMM d, yyyy")}
+                          {payout.payout_type === "video_pay" && payout.video_count != null && (
+                            <>, {payout.video_count} video{payout.video_count === 1 ? "" : "s"}</>
+                          )}
+                        </p>
+                        {isUnpaid(payout) && (
+                          <div className="pt-2 border-t">{renderRowActions(payout, true)}</div>
                         )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
-                {/* Desktop Table View */}
+                {/* Desktop table */}
                 <div className="hidden md:block rounded-md border overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Creator</TableHead>
                         <TableHead>Type</TableHead>
+                        <TableHead>Period</TableHead>
                         <TableHead>Amount</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Date</TableHead>
@@ -1108,66 +808,38 @@ export default function AdminPayouts() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredPayouts.map((payout) => (
-                        <TableRow key={payout.id}>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">{payout.creator?.full_name || "Unknown"}</p>
-                              <p className="text-sm text-muted-foreground">{payout.creator?.email}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell>{getTypeBadge(payout.payout_type)}</TableCell>
-                          <TableCell className="font-medium">{formatCurrency(Number(payout.amount))}</TableCell>
-                          <TableCell>{getStatusBadge(payout.status)}</TableCell>
-                          <TableCell>{format(new Date(payout.created_at), "MMM d, yyyy")}</TableCell>
-                          <TableCell className="text-right">
-                            {payout.status === "pending" && (
-                              <div className="flex gap-2 justify-end">
-                                <Button size="sm" onClick={() => updatePayoutStatus(payout.id, "approved")}>
-                                  Approve
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => updatePayoutStatus(payout.id, "rejected")}
-                                >
-                                  Reject
-                                </Button>
+                      {filteredPayouts.map((payout) => {
+                        const period = formatPeriod(payout.period_start, payout.period_end);
+                        return (
+                          <TableRow key={payout.id}>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium">{payout.creator?.full_name || "Unknown"}</p>
+                                <p className="text-sm text-muted-foreground">{payout.creator?.email}</p>
                               </div>
-                            )}
-                            {payout.status === "approved" && (
-                              <div className="flex items-center gap-2 justify-end">
-                                <Button 
-                                  size="sm" 
-                                  onClick={() => processStripePayout(payout.id)}
-                                  disabled={processingPayoutId === payout.id}
-                                >
-                                  {processingPayoutId === payout.id ? (
-                                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                  ) : (
-                                    <DollarSign className="w-4 h-4 mr-1" />
+                            </TableCell>
+                            <TableCell>{typeLabel(payout.payout_type)}</TableCell>
+                            <TableCell className="text-sm">
+                              {period ? (
+                                <div>
+                                  <p>{period}</p>
+                                  {payout.payout_type === "video_pay" && payout.video_count != null && (
+                                    <p className="text-xs text-muted-foreground">
+                                      {payout.video_count} video{payout.video_count === 1 ? "" : "s"}
+                                    </p>
                                   )}
-                                  {payout.creator?.stripe_onboarding_complete ? "Pay via Stripe" : "Retry Payment"}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => setManualPayoutId(payout.id)}
-                                >
-                                  <HandCoins className="w-4 h-4 mr-1" />
-                                  Mark Manual
-                                </Button>
-                                {!payout.creator?.stripe_onboarding_complete && (
-                                  <Badge variant="outline" className="gap-1 text-destructive border-destructive/30">
-                                    <AlertCircle className="w-3 h-3" />
-                                    No Stripe
-                                  </Badge>
-                                )}
-                              </div>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">No period</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-medium">{formatCurrency(Number(payout.amount))}</TableCell>
+                            <TableCell><StatusBadge status={payout.status} /></TableCell>
+                            <TableCell>{format(new Date(payout.paid_at || payout.created_at), "MMM d, yyyy")}</TableCell>
+                            <TableCell className="text-right">{renderRowActions(payout, false)}</TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -1177,121 +849,101 @@ export default function AdminPayouts() {
         </Card>
       </div>
 
-      {/* Calculation Results Dialog */}
-      <Dialog open={showCalculationDialog} onOpenChange={setShowCalculationDialog}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      {/* Preview next run */}
+      <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Monthly Payout Calculation</DialogTitle>
+            <DialogTitle>Next run preview</DialogTitle>
             <DialogDescription>
-              {calculationResult?.month} - Results for all creators
+              What the daily cycle would open if it ran now. Nothing has been written.
             </DialogDescription>
           </DialogHeader>
-          
-          {calculationResult && (
-            <div className="space-y-4">
-              {/* Summary Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="bg-muted rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold">{calculationResult.summary.creatorsProcessed}</p>
-                  <p className="text-xs text-muted-foreground">Creators</p>
-                </div>
-                <div className="bg-muted rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold">{calculationResult.summary.eligible}</p>
-                  <p className="text-xs text-muted-foreground">$500 Eligible</p>
-                </div>
-                <div className="bg-primary/10 rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold text-primary">{calculationResult.summary.pendingApprovals}</p>
-                  <p className="text-xs text-muted-foreground">Pending Approval</p>
-                </div>
-                <div className="bg-muted rounded-lg p-3 text-center">
-                  <p className="text-2xl font-bold">{calculationResult.summary.skipped}</p>
-                  <p className="text-xs text-muted-foreground">Skipped</p>
-                </div>
+
+          {previewRows && previewRows.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No completed periods are waiting. Every creator is inside their current cycle.
+            </p>
+          )}
+
+          {previewRows && previewRows.length > 0 && (
+            <>
+              {/* Mobile cards */}
+              <div className="md:hidden space-y-3">
+                {previewRows.map((r, i) => (
+                  <div key={`${r.creator_id}-${r.period_start}-${i}`} className="border rounded-lg p-3 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm truncate">{r.creator_name}</p>
+                        <p className="text-xs text-muted-foreground">{formatPeriod(r.period_start, r.period_end)}</p>
+                      </div>
+                      <CycleActionBadge action={r.action} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                      <span className="text-muted-foreground">Videos</span>
+                      <span className="text-right font-medium">{r.video_count}</span>
+                      <span className="text-muted-foreground">Video pay</span>
+                      <span className="text-right font-medium">{formatCurrency(Number(r.video_pay))}</span>
+                      <span className="text-muted-foreground">Revenue</span>
+                      <span className="text-right font-medium">{formatCurrency(Number(r.attributed_revenue))}</span>
+                      <span className="text-muted-foreground">Rate</span>
+                      <span className="text-right font-medium">{Number(r.bonus_rate)}%</span>
+                      <span className="text-muted-foreground">Bonus</span>
+                      <span className="text-right font-medium">{formatCurrency(Number(r.bonus_pay))}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
 
-              {/* Creator Breakdown */}
-              <div className="rounded-md border">
+              {/* Desktop table */}
+              <div className="hidden md:block rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Creator</TableHead>
-                      <TableHead className="text-center">Videos</TableHead>
-                      <TableHead className="text-right">Guarantee</TableHead>
-                      <TableHead className="text-center">Status</TableHead>
-                      <TableHead>Reason</TableHead>
+                      <TableHead>Period</TableHead>
+                      <TableHead className="text-right">Videos</TableHead>
+                      <TableHead className="text-right">Video pay</TableHead>
+                      <TableHead className="text-right">Revenue</TableHead>
+                      <TableHead className="text-right">Rate</TableHead>
+                      <TableHead className="text-right">Bonus</TableHead>
+                      <TableHead>Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(calculationResult.results || []).map((p) => (
-                      <TableRow key={p.creatorId}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {p.creatorName}
-                            {p.eligibleForGuarantee && (
-                              <Badge variant="secondary" className="text-xs">
-                                <Award className="w-3 h-3 mr-1" />
-                                Eligible
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <span className={p.approvedVideosCount >= 35 ? "text-primary font-medium" : ""}>
-                            {p.approvedVideosCount}
-                          </span>
-                          <span className="text-muted-foreground">/35</span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {(p.guaranteeAmount ?? 0) > 0 ? formatCurrency(p.guaranteeAmount) : "-"}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {p.status === "pending_approval" ? (
-                            <Badge variant="secondary" className="gap-1">
-                              <Clock className="w-3 h-3" />
-                              Pending
-                            </Badge>
-                          ) : p.status === "already_exists" ? (
-                            <Badge variant="outline" className="gap-1">
-                              <CheckCircle className="w-3 h-3" />
-                              Exists
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="gap-1 text-muted-foreground">
-                              <XCircle className="w-3 h-3" />
-                              Skipped
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground max-w-[200px]">
-                          {p.reason || "-"}
-                        </TableCell>
+                    {previewRows.map((r, i) => (
+                      <TableRow key={`${r.creator_id}-${r.period_start}-${i}`}>
+                        <TableCell className="font-medium">{r.creator_name}</TableCell>
+                        <TableCell className="text-sm">{formatPeriod(r.period_start, r.period_end)}</TableCell>
+                        <TableCell className="text-right">{r.video_count}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(Number(r.video_pay))}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(Number(r.attributed_revenue))}</TableCell>
+                        <TableCell className="text-right">{Number(r.bonus_rate)}%</TableCell>
+                        <TableCell className="text-right">{formatCurrency(Number(r.bonus_pay))}</TableCell>
+                        <TableCell><CycleActionBadge action={r.action} /></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </div>
-
-              <Button onClick={() => setShowCalculationDialog(false)} className="w-full">
-                Close
-              </Button>
-            </div>
+            </>
           )}
+
+          <Button onClick={() => setShowPreviewDialog(false)} className="w-full">
+            Close
+          </Button>
         </DialogContent>
       </Dialog>
 
-      {/* Bulk Payout Results Dialog */}
+      {/* Bulk pay results */}
       <Dialog open={showBulkDialog} onOpenChange={setShowBulkDialog}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Bulk Payout Results</DialogTitle>
-            <DialogDescription>
-              {bulkResult?.message}
-            </DialogDescription>
+            <DialogTitle>Bulk pay results</DialogTitle>
+            <DialogDescription>{bulkResult?.message}</DialogDescription>
           </DialogHeader>
-          
+
           {bulkResult && (
             <div className="space-y-4">
-              {/* Summary Stats */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-muted rounded-lg p-3 text-center">
                   <p className="text-2xl font-bold">{bulkResult.processed}</p>
@@ -1299,26 +951,23 @@ export default function AdminPayouts() {
                 </div>
                 <div className="bg-primary/10 rounded-lg p-3 text-center">
                   <p className="text-2xl font-bold text-primary">{bulkResult.successful}</p>
-                  <p className="text-xs text-muted-foreground">Successful</p>
+                  <p className="text-xs text-muted-foreground">Paid</p>
                 </div>
-                <div className={`rounded-lg p-3 text-center ${bulkResult.failed > 0 ? 'bg-destructive/10' : 'bg-muted'}`}>
-                  <p className={`text-2xl font-bold ${bulkResult.failed > 0 ? 'text-destructive' : ''}`}>
+                <div className={`rounded-lg p-3 text-center ${bulkResult.failed > 0 ? "bg-destructive/10" : "bg-muted"}`}>
+                  <p className={`text-2xl font-bold ${bulkResult.failed > 0 ? "text-destructive" : ""}`}>
                     {bulkResult.failed}
                   </p>
                   <p className="text-xs text-muted-foreground">Failed</p>
                 </div>
               </div>
 
-              {bulkResult.total_amount && bulkResult.total_amount > 0 && (
+              {!!bulkResult.total_amount && bulkResult.total_amount > 0 && (
                 <div className="bg-primary/10 rounded-lg p-4 text-center">
-                  <p className="text-3xl font-bold text-primary">
-                    {formatCurrency(bulkResult.total_amount)}
-                  </p>
-                  <p className="text-sm text-muted-foreground">Total Transferred</p>
+                  <p className="text-3xl font-bold text-primary">{formatCurrency(bulkResult.total_amount)}</p>
+                  <p className="text-sm text-muted-foreground">Total sent</p>
                 </div>
               )}
 
-              {/* Results Breakdown */}
               {bulkResult.results.length > 0 && (
                 <div className="rounded-md border">
                   <Table>
@@ -1333,9 +982,7 @@ export default function AdminPayouts() {
                       {bulkResult.results.map((r) => (
                         <TableRow key={r.payout_id}>
                           <TableCell>{r.creator_name}</TableCell>
-                          <TableCell className="text-right font-medium">
-                            {formatCurrency(r.amount)}
-                          </TableCell>
+                          <TableCell className="text-right font-medium">{formatCurrency(r.amount)}</TableCell>
                           <TableCell className="text-center">
                             {r.success ? (
                               <Badge variant="default" className="gap-1">
@@ -1348,9 +995,7 @@ export default function AdminPayouts() {
                                   <XCircle className="w-3 h-3" />
                                   Failed
                                 </Badge>
-                                <span className="text-xs text-muted-foreground max-w-[200px] truncate">
-                                  {r.error}
-                                </span>
+                                <span className="text-xs text-muted-foreground max-w-[200px] truncate">{r.error}</span>
                               </div>
                             )}
                           </TableCell>
@@ -1368,15 +1013,21 @@ export default function AdminPayouts() {
           )}
         </DialogContent>
       </Dialog>
-      {/* Manual Payment Confirmation Dialog */}
-      <AlertDialog open={!!manualPayCreator} onOpenChange={(open) => !open && setManualPayCreator(null)}>
+
+      {/* Mark paid manually */}
+      <AlertDialog open={!!manualPayoutId} onOpenChange={(open) => !open && setManualPayoutId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Mark as Manually Paid</AlertDialogTitle>
+            <AlertDialogTitle>Mark as paid manually</AlertDialogTitle>
             <AlertDialogDescription>
-              This will record a payment of <strong>{manualPayCreator ? `$${manualPayCreator.accrued_commission.toFixed(2)}` : ""}</strong> for <strong>{manualPayCreator?.full_name}</strong> as paid outside of Stripe (e.g., Venmo, wire transfer, cash).
-              <br /><br />
-              Future commission calculations will only count revenue earned <strong>after this point</strong>, preventing double-counting.
+              {manualPayout ? (
+                <>
+                  This records the <strong>{formatCurrency(Number(manualPayout.amount))}</strong>{" "}
+                  {typeLabel(manualPayout.payout_type).toLowerCase()} payout for{" "}
+                  <strong>{manualPayout.creator?.full_name}</strong> as paid outside the app. No money moves and no email is sent.
+                  {manualPayout.payout_type === "video_pay" && " Its videos are marked paid in the ledger."}
+                </>
+              ) : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1385,69 +1036,11 @@ export default function AdminPayouts() {
               disabled={markingManual}
               onClick={(e) => {
                 e.preventDefault();
-                if (manualPayCreator) markManualPayment(manualPayCreator);
+                markManualPaid();
               }}
             >
-              {markingManual ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : (
-                <HandCoins className="w-4 h-4 mr-2" />
-              )}
-              Confirm Manual Payment
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      {/* Mark History Payout as Manual Dialog */}
-      <AlertDialog open={!!manualPayoutId} onOpenChange={(open) => !open && setManualPayoutId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Mark Payout as Manually Paid</AlertDialogTitle>
-            <AlertDialogDescription>
-              {(() => {
-                const p = payouts.find(p => p.id === manualPayoutId);
-                return p ? (
-                  <>
-                    This will mark the <strong>{formatCurrency(Number(p.amount))}</strong> {p.payout_type} payout for <strong>{p.creator?.full_name}</strong> as paid outside of Stripe.
-                  </>
-                ) : null;
-              })()}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={markingManual}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={markingManual}
-              onClick={async (e) => {
-                e.preventDefault();
-                if (!manualPayoutId) return;
-                setMarkingManual(true);
-                try {
-                  const { error } = await supabase
-                    .from("payouts")
-                    .update({
-                      status: "paid" as any,
-                      paid_at: new Date().toISOString(),
-                      notes: "Manual payment - paid outside Stripe",
-                    })
-                    .eq("id", manualPayoutId);
-                  if (error) throw error;
-                  toast.success("Payout marked as manually paid");
-                  setManualPayoutId(null);
-                  fetchPayouts();
-                } catch (err: any) {
-                  toast.error(err.message || "Failed to update payout");
-                } finally {
-                  setMarkingManual(false);
-                }
-              }}
-            >
-              {markingManual ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : (
-                <HandCoins className="w-4 h-4 mr-2" />
-              )}
-              Confirm Manual Payment
+              {markingManual ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <HandCoins className="w-4 h-4 mr-2" />}
+              Mark paid
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -149,31 +149,16 @@ export default function CreatorMyVideos() {
       );
 
       if (data) {
-        // Get commission rate
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("commission_percentage")
-          .eq("id", profileId)
-          .single();
-
-        const commissionRate = profile?.commission_percentage || 10;
-
-        // Fetch all paid payouts linked to videos (bounties)
-        const videoIds = data.map(v => v.id);
-        const { data: bountyPayouts } = await supabase
-          .from("payouts")
-          .select("reference_id, amount, status")
+        // Per-video pay from the ledger: one row per approved non-bounty video.
+        const { data: ledger } = await supabase
+          .from("video_earnings")
+          .select("video_id, amount")
           .eq("creator_id", profileId)
-          .eq("status", "paid")
-          .in("reference_id", videoIds);
+          .in("status", ["accrued", "paid"]);
 
-        // Create a map of video_id -> total bounty earnings
-        const bountyEarningsByVideo: Record<string, number> = {};
-        bountyPayouts?.forEach(payout => {
-          if (payout.reference_id) {
-            bountyEarningsByVideo[payout.reference_id] = 
-              (bountyEarningsByVideo[payout.reference_id] || 0) + parseFloat(payout.amount as any);
-          }
+        const earningsByVideo: Record<string, number> = {};
+        ledger?.forEach((row) => {
+          earningsByVideo[row.video_id] = Number(row.amount) || 0;
         });
 
         // Fetch mentor feedback for rejected AND revision_requested videos
@@ -217,10 +202,6 @@ export default function CreatorMyVideos() {
             { impressions: 0, clicks: 0, purchases: 0, revenue: 0 }
           ) || { impressions: 0, clicks: 0, purchases: 0, revenue: 0 };
 
-          // Calculate ad commission earnings + any bounty payouts linked to this video
-          const adCommissionEarnings = stats.revenue * (commissionRate / 100);
-          const bountyEarnings = bountyEarningsByVideo[video.id] || 0;
-
           return {
             id: video.id,
             unique_video_id: video.unique_video_id,
@@ -230,7 +211,7 @@ export default function CreatorMyVideos() {
             created_at: video.created_at,
             updated_at: video.updated_at,
             ...stats,
-            earnings: adCommissionEarnings + bountyEarnings,
+            earnings: earningsByVideo[video.id] ?? 0,
             thumbnail_url: video.thumbnail_url,
             video_url: video.video_url,
             admin_feedback: (video as any).admin_feedback || null,

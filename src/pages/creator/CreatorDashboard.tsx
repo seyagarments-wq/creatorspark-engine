@@ -74,7 +74,6 @@ export default function CreatorDashboard() {
   });
   const [recentVideos, setRecentVideos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [commissionRate, setCommissionRate] = useState(10);
   const [playingVideo, setPlayingVideo] = useState<{ url: string; title: string } | null>(null);
 
   useEffect(() => {
@@ -85,17 +84,6 @@ export default function CreatorDashboard() {
 
   async function fetchDashboardData() {
     try {
-      // Fetch commission rate
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("commission_percentage")
-        .eq("id", profileId)
-        .single();
-
-      if (profile?.commission_percentage) {
-        setCommissionRate(profile.commission_percentage);
-      }
-
       // Fetch videos
       const { data: videos } = await supabase
         .from("videos")
@@ -188,7 +176,7 @@ export default function CreatorDashboard() {
           totalVideos: videos.length,
           pendingVideos: pendingCount,
           approvedVideos: approvedCount,
-          totalEarnings: 0, // Will come from payouts
+          totalEarnings: 0, // Filled from the ledger below
           totalImpressions,
           totalClicks,
           totalPurchases,
@@ -207,19 +195,24 @@ export default function CreatorDashboard() {
         setRecentVideos(videos.slice(0, 5));
       }
 
-      // Fetch total earnings from payouts
-      const { data: payouts } = await supabase
-        .from("payouts")
-        .select("amount, status")
-        .eq("creator_id", profileId);
+      // Earnings: the per-video ledger plus any bounty payouts.
+      const [ledgerRes, bountyRes] = await Promise.all([
+        supabase
+          .from("video_earnings")
+          .select("amount")
+          .eq("creator_id", profileId)
+          .in("status", ["accrued", "paid"]),
+        supabase
+          .from("payouts")
+          .select("amount")
+          .eq("creator_id", profileId)
+          .eq("payout_type", "bounty")
+          .in("status", ["paid", "pending", "approved"]),
+      ]);
 
-      if (payouts) {
-        const totalEarnings = payouts
-          .filter((p) => p.status === "paid")
-          .reduce((sum, p) => sum + parseFloat(p.amount as any), 0);
-
-        setStats((prev) => ({ ...prev, totalEarnings }));
-      }
+      const ledgerTotal = (ledgerRes.data || []).reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+      const bountyTotal = (bountyRes.data || []).reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+      setStats((prev) => ({ ...prev, totalEarnings: ledgerTotal + bountyTotal }));
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
     } finally {
@@ -238,10 +231,6 @@ export default function CreatorDashboard() {
       style: "currency",
       currency: "USD",
     }).format(amount);
-  };
-
-  const calculateEarnings = (revenue: number) => {
-    return revenue * (commissionRate / 100);
   };
 
   return (
@@ -310,10 +299,10 @@ export default function CreatorDashboard() {
               <div className="bg-background/50 rounded-lg p-3 text-center">
                 <div className="flex items-center justify-center gap-1 text-success mb-1">
                   <DollarSign className="w-4 h-4" />
-                  <span className="text-xs">Your Earnings</span>
+                  <span className="text-xs">Revenue</span>
                 </div>
                 <p className="text-lg font-bold text-success">
-                  {formatCurrency(calculateEarnings(metaStats.totalRevenue))}
+                  {formatCurrency(metaStats.totalRevenue)}
                 </p>
               </div>
             </div>
@@ -359,7 +348,7 @@ export default function CreatorDashboard() {
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-sm font-bold text-success">
-                          {formatCurrency(calculateEarnings(video.revenue))}
+                          {formatCurrency(video.revenue)}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {video.purchases} sales

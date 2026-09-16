@@ -144,9 +144,7 @@ serve(async (req) => {
         meta_video_id, 
         creator_id, 
         unique_video_id,
-        created_at,
-        commission_override,
-        profiles!videos_creator_id_fkey(id, commission_percentage)
+        created_at
       `)
       .eq("status", "approved");
 
@@ -163,14 +161,6 @@ serve(async (req) => {
     
     const platformVideos = allVideosFromDb;
     console.log(`Syncing: ${platformVideos.length} approved videos (${vidByMetaVideoId.size} with meta_video_id)`);
-
-    const { data: commissionSetting } = await supabase
-      .from("settings")
-      .select("value")
-      .eq("key", "commission")
-      .single();
-
-    const defaultCommission = commissionSetting?.value?.default || 10;
 
     // Fetch ALL ads with exponential backoff on rate limit
     let allAds: any[] = [];
@@ -310,18 +300,17 @@ serve(async (req) => {
 
     async function savePerformanceData(
       videoId: string, creatorId: string, videoTitle: string, metricDate: string,
-      metrics: Metrics, commissionRate: number
+      metrics: Metrics
     ) {
       const today = isoDate(new Date());
       const hasAnyActivity = metrics.impressions > 0 || metrics.clicks > 0 || metrics.spend > 0 || metrics.purchases > 0 || metrics.revenue > 0;
       if (!hasAnyActivity) return;
 
       let newSales = 0;
-      let existingCommissionRate: number | null = null;
-      
+
       const { data: existingRecord } = await supabase
         .from("performance_data")
-        .select("id, purchases, commission_rate_at_time")
+        .select("id, purchases")
         .eq("video_id", videoId)
         .eq("metric_date", metricDate)
         .maybeSingle();
@@ -330,9 +319,6 @@ serve(async (req) => {
         const previousPurchases = existingRecord?.purchases || 0;
         newSales = metrics.purchases - previousPurchases;
       }
-      
-      existingCommissionRate = existingRecord?.commission_rate_at_time;
-      const rateToStore = existingCommissionRate ?? commissionRate;
 
       const { error: upsertError } = await supabase
         .from("performance_data")
@@ -340,7 +326,9 @@ serve(async (req) => {
           video_id: videoId, metric_date: metricDate,
           impressions: metrics.impressions, clicks: metrics.clicks,
           spend: metrics.spend, purchases: metrics.purchases,
-          revenue: metrics.revenue, commission_rate_at_time: rateToStore,
+          revenue: metrics.revenue,
+          // Pay is a flat per-video rate now. This column is kept but no longer derived from anything.
+          commission_rate_at_time: null,
           recorded_at: new Date().toISOString(),
         }, { onConflict: "video_id,metric_date" });
 
@@ -353,12 +341,11 @@ serve(async (req) => {
         console.log(`New sale for ${videoTitle} (${metricDate}): ${newSales} sales, $${metrics.revenue.toFixed(2)} revenue`);
         const { data: profile } = await supabase.from("profiles").select("user_id, full_name").eq("id", creatorId).single();
         if (profile?.user_id) {
-          const earnings = metrics.revenue * (commissionRate / 100);
           const saleText = newSales === 1 ? "sale" : "sales";
           await supabase.from("notifications").insert({
             user_id: profile.user_id,
             title: `💰 New ${saleText}!`,
-            message: `Your video "${videoTitle}" just got ${newSales} ${saleText}! You earned $${earnings.toFixed(2)} in commission.`,
+            message: `Your video "${videoTitle}" just got ${newSales} ${saleText}! That is $${metrics.revenue.toFixed(2)} in attributed revenue today.`,
             notification_type: "sale",
             link: "/creator/analytics",
           });
@@ -444,18 +431,13 @@ serve(async (req) => {
           await supabase.from("videos").update({ meta_status: newStatus }).eq("id", video.id);
         }
 
-        const profilesData = video.profiles as unknown as { id: string; commission_percentage: number } | { id: string; commission_percentage: number }[] | null;
-        const creatorProfile = Array.isArray(profilesData) ? profilesData[0] : profilesData;
-        const commissionRate = video.commission_override ?? creatorProfile?.commission_percentage ?? defaultCommission;
-
         for (const [metricDate, metrics] of totalsByDate.entries()) {
-          await savePerformanceData(video.id, video.creator_id, video.unique_video_id || "Unknown Video", metricDate, metrics, commissionRate);
+          await savePerformanceData(video.id, video.creator_id, video.unique_video_id || "Unknown Video", metricDate, metrics);
         }
 
         const totalRevenueYtd = Array.from(totalsByDate.values()).reduce((sum, m) => sum + m.revenue, 0);
-        const creatorEarnings = totalRevenueYtd * (commissionRate / 100);
 
-        console.log(`Video ${video.unique_video_id}: ${totalImpressionsYtd} imp YTD, $${totalRevenueYtd.toFixed(2)} rev, $${creatorEarnings.toFixed(2)} earnings (${commissionRate}%)`);
+        console.log(`Video ${video.unique_video_id}: ${totalImpressionsYtd} imp YTD, $${totalRevenueYtd.toFixed(2)} rev`);
 
         totalSyncedImpressions += totalImpressionsYtd;
         totalSyncedRevenue += totalRevenueYtd;

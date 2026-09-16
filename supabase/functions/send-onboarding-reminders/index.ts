@@ -32,7 +32,7 @@ function getDay1Email(name: string): { subject: string; html: string } {
           <li><strong>Create your account</strong> — Sign in at <a href="https://creatorsctrl.com/auth" style="color:#6366f1;">creatorsctrl.com</a></li>
           <li><strong>Connect Stripe</strong> — So we can send you payouts</li>
           <li><strong>Request your free sample</strong> — Get the product shipped to you</li>
-          <li><strong>Submit your first video</strong> — Start earning commissions!</li>
+          <li><strong>Submit your first video</strong> and get paid for every approved video</li>
         </ol>
         <p style="margin-top:24px;">
           <a href="https://creatorsctrl.com/auth" style="background:#6366f1;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600;">Get Started Now</a>
@@ -112,7 +112,7 @@ function getDay7Email(name: string, missingSteps: string[]): { subject: string; 
         <p style="color:#444;">We approved you to join Creators Control 7 days ago, and we really don't want you to miss out on this opportunity.</p>
         <p style="color:#444;">You're <strong>so close</strong> — here's what's left:</p>
         <ul style="color:#444; line-height:1.8;">${stepsHtml}</ul>
-        <p style="color:#444;">Other creators who joined around the same time are already submitting videos and earning commissions. We want you to be right there with them! 💪</p>
+        <p style="color:#444;">Other creators who joined around the same time are already submitting videos and getting paid for every approved one. We want you to be right there with them! 💪</p>
         <p style="color:#444;"><strong>💬 Need help? Text Kohl (our founder) directly at (425) 588-1480</strong> — he'll personally walk you through it in 5 minutes.</p>
         <p style="margin-top:24px;">
           <a href="https://creatorsctrl.com/auth" style="background:#6366f1;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600;">Finish Setup Now</a>

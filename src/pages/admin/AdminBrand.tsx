@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Globe, Percent, Upload, Save, Image, Instagram } from "lucide-react";
+import { Building2, Globe, Upload, Save, Image, Instagram } from "lucide-react";
 
 interface SocialLinks {
   instagram?: string;
@@ -24,7 +24,6 @@ interface Brand {
   description: string | null;
   logo_url: string | null;
   website_url: string | null;
-  commission_rate: number | null;
   is_active: boolean | null;
   social_links: SocialLinks | null;
 }
@@ -59,7 +58,6 @@ export default function AdminBrand() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
-  const [commissionRate, setCommissionRate] = useState("10");
   const [logoUrl, setLogoUrl] = useState("");
   
   // Social links state
@@ -91,7 +89,6 @@ export default function AdminBrand() {
         setName(data.name || "");
         setDescription(data.description || "");
         setWebsiteUrl(data.website_url || "");
-        setCommissionRate(String(data.commission_rate || 10));
         setLogoUrl(data.logo_url || "");
         
         // Load social links
@@ -123,7 +120,6 @@ export default function AdminBrand() {
         name,
         description: description || null,
         website_url: websiteUrl || null,
-        commission_rate: parseFloat(commissionRate) || 10,
         logo_url: logoUrl || null,
         social_links: Object.keys(socialLinks).length > 0 ? socialLinks : null,
       };
@@ -305,7 +301,7 @@ export default function AdminBrand() {
             <CardHeader>
               <CardTitle className="text-lg">Brand Settings</CardTitle>
               <CardDescription>
-                Configure commission rates and links
+                Website and logo links
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -322,30 +318,6 @@ export default function AdminBrand() {
                   value={websiteUrl}
                   onChange={(e) => setWebsiteUrl(e.target.value)}
                 />
-              </div>
-
-              {/* Commission Rate */}
-              <div className="space-y-2">
-                <Label htmlFor="commission" className="flex items-center gap-2">
-                  <Percent className="w-4 h-4" />
-                  Default Commission Rate
-                </Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id="commission"
-                    type="number"
-                    min="0"
-                    max="100"
-                    placeholder="10"
-                    value={commissionRate}
-                    onChange={(e) => setCommissionRate(e.target.value)}
-                    className="w-24"
-                  />
-                  <span className="text-muted-foreground">%</span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  This is the default commission for new creators. You can set individual rates per creator.
-                </p>
               </div>
 
               {/* Logo URL (for manual entry) */}

@@ -41,10 +41,11 @@ interface CreatorData {
   full_name: string;
   email: string;
   avatar_url: string | null;
-  commission_percentage: number;
   created_at: string;
   status: string;
   is_mentor: boolean;
+  /** Anchor of the 28-day pay cycle: the first approved video. */
+  first_video_at: string | null;
 }
 
 interface VideoWithPerf {
@@ -58,7 +59,9 @@ interface VideoWithPerf {
   created_at: string;
   revenue: number;
   purchases: number;
-  commission: number;
+  /** Flat video pay from the ledger, null when the video has not earned. */
+  earned: number | null;
+  earnedStatus: "accrued" | "paid" | null;
 }
 
 export default function AdminCreatorProfile() {
@@ -70,6 +73,8 @@ export default function AdminCreatorProfile() {
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<TimeRange>("30d");
   const [sortBy, setSortBy] = useState<SortBy>("revenue");
+  /** All-time ledger total: accrued + paid video earnings, plus paid bounties. */
+  const [earnedTotal, setEarnedTotal] = useState(0);
 
   useEffect(() => {
     if (id) fetchCreatorData();
@@ -81,12 +86,34 @@ export default function AdminCreatorProfile() {
       // Fetch profile
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("id, full_name, email, avatar_url, commission_percentage, created_at, status, is_mentor")
+        .select("id, full_name, email, avatar_url, created_at, status, is_mentor, first_video_at")
         .eq("id", id!)
         .single();
 
       if (profileError) throw profileError;
       setCreator(profile);
+
+      // Ledger: one row per approved non-bounty video, plus any paid bounties.
+      const [earningsRes, bountyRes] = await Promise.all([
+        supabase
+          .from("video_earnings")
+          .select("video_id, amount, status")
+          .eq("creator_id", id!)
+          .in("status", ["accrued", "paid"]),
+        supabase
+          .from("payouts")
+          .select("amount")
+          .eq("creator_id", id!)
+          .eq("status", "paid")
+          .eq("payout_type", "bounty"),
+      ]);
+      const earningsByVideo = new Map<string, { amount: number; status: "accrued" | "paid" }>();
+      (earningsRes.data || []).forEach((row) => {
+        earningsByVideo.set(row.video_id, { amount: Number(row.amount), status: row.status as "accrued" | "paid" });
+      });
+      const ledgerSum = (earningsRes.data || []).reduce((sum, r) => sum + Number(r.amount), 0);
+      const bountySum = (bountyRes.data || []).reduce((sum, r) => sum + Number(r.amount), 0);
+      setEarnedTotal(ledgerSum + bountySum);
 
       // Fetch all videos for this creator
       const { data: creatorVideos, error: videosError } = await supabase
@@ -106,7 +133,7 @@ export default function AdminCreatorProfile() {
       const videoIds = creatorVideos.map((v) => v.id);
       let perfQuery = supabase
         .from("performance_data")
-        .select("video_id, revenue, purchases, commission_rate_at_time, metric_date")
+        .select("video_id, revenue, purchases, metric_date")
         .in("video_id", videoIds);
 
       if (timeRange !== "all") {
@@ -135,24 +162,23 @@ export default function AdminCreatorProfile() {
       const { data: perfData } = await perfQuery;
 
       // Aggregate per video
-      const perfMap = new Map<string, { revenue: number; purchases: number; commissionRate: number }>();
+      const perfMap = new Map<string, { revenue: number; purchases: number }>();
       (perfData || []).forEach((row) => {
-        const existing = perfMap.get(row.video_id) || { revenue: 0, purchases: 0, commissionRate: 0 };
+        const existing = perfMap.get(row.video_id) || { revenue: 0, purchases: 0 };
         existing.revenue += Number(row.revenue || 0);
         existing.purchases += Number(row.purchases || 0);
-        if (row.commission_rate_at_time) existing.commissionRate = Number(row.commission_rate_at_time);
         perfMap.set(row.video_id, existing);
       });
 
       const videosWithPerf: VideoWithPerf[] = creatorVideos.map((v) => {
         const perf = perfMap.get(v.id);
-        const commissionRate = perf?.commissionRate || profile.commission_percentage || 10;
-        const revenue = perf?.revenue || 0;
+        const earning = earningsByVideo.get(v.id);
         return {
           ...v,
-          revenue,
+          revenue: perf?.revenue || 0,
           purchases: perf?.purchases || 0,
-          commission: revenue * (commissionRate / 100),
+          earned: earning?.amount ?? null,
+          earnedStatus: earning?.status ?? null,
         };
       });
 
@@ -177,9 +203,8 @@ export default function AdminCreatorProfile() {
       (acc, v) => ({
         revenue: acc.revenue + v.revenue,
         purchases: acc.purchases + v.purchases,
-        commission: acc.commission + v.commission,
       }),
-      { revenue: 0, purchases: 0, commission: 0 }
+      { revenue: 0, purchases: 0 }
     );
   }, [videos]);
 
@@ -252,8 +277,12 @@ export default function AdminCreatorProfile() {
             <p className="text-sm text-muted-foreground">
               Creator since {new Date(creator.created_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
             </p>
+            <p className="text-xs text-muted-foreground">
+              {creator.first_video_at
+                ? `First approved ${new Date(creator.first_video_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                : "No approved video yet"}
+            </p>
             <div className="flex items-center gap-2 mt-1">
-              <Badge variant="outline">{creator.commission_percentage}% commission</Badge>
               <Badge className={creator.status === "active" ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}>
                 {creator.status}
               </Badge>
@@ -358,8 +387,8 @@ export default function AdminCreatorProfile() {
                   <TrendingUp className="w-4 h-4 text-primary" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Earnings (Commission)</p>
-                  <p className="text-xl font-bold">{formatCurrency(totals.commission)}</p>
+                  <p className="text-xs text-muted-foreground">Earned (all time)</p>
+                  <p className="text-xl font-bold">{formatCurrency(earnedTotal)}</p>
                 </div>
               </div>
             </CardContent>
@@ -474,9 +503,13 @@ export default function AdminCreatorProfile() {
                     <p className="text-xs font-medium text-success">{formatCurrency(video.revenue)}</p>
                     <p className="text-[10px] text-muted-foreground">revenue</p>
                   </div>
-                  <div className="text-right hidden sm:block">
-                    <p className="text-xs font-medium">{formatCurrency(video.commission)}</p>
-                    <p className="text-[10px] text-muted-foreground">earnings</p>
+                  <div className="text-right hidden sm:block w-16">
+                    {video.earned != null && (
+                      <>
+                        <p className="text-xs font-medium">{formatCurrency(video.earned)}</p>
+                        <p className="text-[10px] text-muted-foreground">{video.earnedStatus}</p>
+                      </>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground hidden md:block w-20 text-right">
                     {formatDistanceToNow(new Date(video.created_at), { addSuffix: true })}

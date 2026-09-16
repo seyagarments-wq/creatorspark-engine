@@ -73,14 +73,14 @@ export default function CreatorVideos() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [commissionRate, setCommissionRate] = useState(10);
+  const [earningsByVideo, setEarningsByVideo] = useState<Record<string, number>>({});
   const [previewVideo, setPreviewVideo] = useState<VideoWithPerformance | null>(null);
   const [activeCommentVideoId, setActiveCommentVideoId] = useState<string | null>(null);
 
   useEffect(() => {
     if (profileId) {
       fetchVideos();
-      fetchCommissionRate();
+      fetchEarnings();
     }
   }, [profileId]);
 
@@ -107,19 +107,22 @@ export default function CreatorVideos() {
     }
   }
 
-  async function fetchCommissionRate() {
+  // Per-video pay from the ledger: one row per approved non-bounty video.
+  async function fetchEarnings() {
     try {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("commission_percentage")
-        .eq("id", profileId)
-        .single();
+      const { data } = await supabase
+        .from("video_earnings")
+        .select("video_id, amount")
+        .eq("creator_id", profileId)
+        .in("status", ["accrued", "paid"]);
 
-      if (profile?.commission_percentage) {
-        setCommissionRate(profile.commission_percentage);
-      }
+      const byVideo: Record<string, number> = {};
+      (data || []).forEach((row) => {
+        byVideo[row.video_id] = Number(row.amount) || 0;
+      });
+      setEarningsByVideo(byVideo);
     } catch (error) {
-      console.error("Error fetching commission rate:", error);
+      console.error("Error fetching video earnings:", error);
     }
   }
 
@@ -154,7 +157,7 @@ export default function CreatorVideos() {
 
     return {
       ...stats,
-      earnings: stats.revenue * (commissionRate / 100),
+      earnings: earningsByVideo[video.id] ?? 0,
     };
   }
 

@@ -59,7 +59,6 @@ serve(async (req) => {
           full_name,
           user_id,
           social_handles,
-          commission_percentage,
           instagram_user_id,
           instagram_username,
           instagram_business_account_id,
@@ -127,7 +126,6 @@ serve(async (req) => {
       full_name: string;
       user_id: string;
       social_handles: { instagram?: string } | null;
-      commission_percentage: number;
       instagram_user_id: string | null;
       instagram_username: string | null;
       instagram_business_account_id: string | null;

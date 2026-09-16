@@ -18,7 +18,6 @@ interface CreatorProfile {
   user_id: string;
   full_name: string;
   avatar_url: string | null;
-  commission_percentage: number | null;
 }
 
 const json = (body: unknown, status = 200) =>
@@ -100,7 +99,7 @@ serve(async (req) => {
     const profiles = await fetchAll<CreatorProfile>((from, to) =>
       supabaseAdmin
         .from("profiles")
-        .select("id, user_id, full_name, avatar_url, commission_percentage")
+        .select("id, user_id, full_name, avatar_url")
         .in("user_id", creatorUserIds)
         .range(from, to),
     );
@@ -170,6 +169,21 @@ serve(async (req) => {
       creatorBonus[p.creator_id] = (creatorBonus[p.creator_id] || 0) + (p.amount || 0);
     }
 
+    // 5b) Flat per-video pay from the ledger (accrued or paid; reversed rows do not count)
+    const creatorVideoEarnings: Record<string, number> = {};
+    const earnings = await fetchAll<{ creator_id: string; amount: number | string | null }>((from, to) =>
+      supabaseAdmin
+        .from("video_earnings")
+        .select("creator_id, amount")
+        .in("creator_id", profileIds)
+        .in("status", ["accrued", "paid"])
+        .range(from, to),
+    );
+    for (const e of earnings) {
+      creatorVideoEarnings[e.creator_id] =
+        (creatorVideoEarnings[e.creator_id] || 0) + (parseFloat(String(e.amount ?? 0)) || 0);
+    }
+
     // 6) Referral data (successful referrals count + bonus earned)
     const creatorReferralCount: Record<string, number> = {};
     const creatorReferralBonus: Record<string, number> = {};
@@ -190,10 +204,9 @@ serve(async (req) => {
       const approvedVideos = creatorVideoCount[p.id] || 0;
       const totalRevenue = creatorRevenue[p.id] || 0;
       const totalSales = creatorPurchases[p.id] || 0;
-      const commissionRate = p.commission_percentage ?? 10;
-      const commissionEarnings = totalRevenue * (commissionRate / 100);
+      const videoEarnings = creatorVideoEarnings[p.id] || 0;
       const bonusEarnings = creatorBonus[p.id] || 0;
-      const totalEarnings = commissionEarnings + bonusEarnings;
+      const totalEarnings = videoEarnings + bonusEarnings;
       const referralCount = creatorReferralCount[p.id] || 0;
       const referralBonus = creatorReferralBonus[p.id] || 0;
 
@@ -201,7 +214,7 @@ serve(async (req) => {
         metric === "revenue"
           ? totalRevenue
           : metric === "earnings"
-            ? commissionEarnings
+            ? totalEarnings
             : metric === "referrals"
               ? referralCount
               : approvedVideos;
@@ -214,7 +227,10 @@ serve(async (req) => {
         totalRevenue,
         totalSales,
         totalEarnings,
-        commissionEarnings,
+        videoEarnings,
+        // Legacy alias, same number as videoEarnings. The admin dashboard type still names it;
+        // drop once that type is updated.
+        commissionEarnings: videoEarnings,
         referralCount,
         referralBonus,
         metric_value: metricValue,

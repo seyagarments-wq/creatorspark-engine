@@ -27,6 +27,7 @@ import {
   Camera,
   Users,
   CalendarRange,
+  Percent,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import logo from "@/assets/logo.png";
@@ -71,6 +72,7 @@ const navSections = [
     items: [
       { icon: MessageCircle, label: "Messages", href: "/creator/chat" },
       { icon: Banknote, label: "Payouts", href: "/creator/payouts" },
+      { icon: Percent, label: "Bonus", href: "/creator/bonus" },
       { icon: UserRound, label: "Profile", href: "/creator/profile" },
       { icon: LifeBuoy, label: "Support", href: "/creator/help" },
     ],

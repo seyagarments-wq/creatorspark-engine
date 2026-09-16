@@ -44,7 +44,6 @@ interface CreatorData {
   full_name: string;
   email: string;
   avatar_url: string | null;
-  commission_percentage: number;
   created_at: string;
   user_id: string;
 }
@@ -60,7 +59,6 @@ interface VideoWithPerf {
   bounty_id: string | null;
   revenue: number;
   purchases: number;
-  commission: number;
   impressions: number;
   clicks: number;
   spend: number;
@@ -114,7 +112,7 @@ export default function MenteeProfile() {
       // Fetch profile
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("id, full_name, email, avatar_url, commission_percentage, created_at, user_id")
+        .select("id, full_name, email, avatar_url, created_at, user_id")
         .eq("id", id!)
         .single();
 
@@ -141,7 +139,7 @@ export default function MenteeProfile() {
       const videoIds = creatorVideos.map((v) => v.id);
       let perfQuery = supabase
         .from("performance_data")
-        .select("video_id, revenue, purchases, commission_rate_at_time, metric_date, impressions, clicks, spend")
+        .select("video_id, revenue, purchases, metric_date, impressions, clicks, spend")
         .in("video_id", videoIds);
 
       if (timeRange !== "all") {
@@ -156,27 +154,24 @@ export default function MenteeProfile() {
 
       const { data: perfData } = await perfQuery;
 
-      const perfMap = new Map<string, { revenue: number; purchases: number; commissionRate: number; impressions: number; clicks: number; spend: number }>();
+      const perfMap = new Map<string, { revenue: number; purchases: number; impressions: number; clicks: number; spend: number }>();
       (perfData || []).forEach((row) => {
-        const existing = perfMap.get(row.video_id) || { revenue: 0, purchases: 0, commissionRate: 0, impressions: 0, clicks: 0, spend: 0 };
+        const existing = perfMap.get(row.video_id) || { revenue: 0, purchases: 0, impressions: 0, clicks: 0, spend: 0 };
         existing.revenue += Number(row.revenue || 0);
         existing.purchases += Number(row.purchases || 0);
         existing.impressions += Number(row.impressions || 0);
         existing.clicks += Number(row.clicks || 0);
         existing.spend += Number(row.spend || 0);
-        if (row.commission_rate_at_time) existing.commissionRate = Number(row.commission_rate_at_time);
         perfMap.set(row.video_id, existing);
       });
 
       const videosWithPerf: VideoWithPerf[] = creatorVideos.map((v) => {
         const perf = perfMap.get(v.id);
-        const commissionRate = perf?.commissionRate || profile.commission_percentage || 10;
         const revenue = perf?.revenue || 0;
         return {
           ...v,
           revenue,
           purchases: perf?.purchases || 0,
-          commission: revenue * (commissionRate / 100),
           impressions: perf?.impressions || 0,
           clicks: perf?.clicks || 0,
           spend: perf?.spend || 0,
@@ -205,12 +200,11 @@ export default function MenteeProfile() {
       (acc, v) => ({
         revenue: acc.revenue + v.revenue,
         purchases: acc.purchases + v.purchases,
-        commission: acc.commission + v.commission,
         impressions: acc.impressions + v.impressions,
         clicks: acc.clicks + v.clicks,
         spend: acc.spend + v.spend,
       }),
-      { revenue: 0, purchases: 0, commission: 0, impressions: 0, clicks: 0, spend: 0 }
+      { revenue: 0, purchases: 0, impressions: 0, clicks: 0, spend: 0 }
     );
   }, [videos]);
 
@@ -370,8 +364,8 @@ export default function MenteeProfile() {
                   <DollarSign className="w-4 h-4 text-primary" />
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Earnings</p>
-                  <p className="text-lg font-bold">{formatCurrency(totals.commission)}</p>
+                  <p className="text-xs text-muted-foreground">Ad Spend</p>
+                  <p className="text-lg font-bold">{formatCurrency(totals.spend)}</p>
                 </div>
               </div>
             </CardContent>
@@ -505,10 +499,6 @@ export default function MenteeProfile() {
                   <div className="text-right hidden sm:block">
                     <p className="text-xs font-medium text-emerald-500">{formatCurrency(video.revenue)}</p>
                     <p className="text-[10px] text-muted-foreground">revenue</p>
-                  </div>
-                  <div className="text-right hidden md:block">
-                    <p className="text-xs font-medium">{formatCurrency(video.commission)}</p>
-                    <p className="text-[10px] text-muted-foreground">earnings</p>
                   </div>
                   <p className="text-xs text-muted-foreground hidden lg:block w-20 text-right">
                     {formatDistanceToNow(new Date(video.created_at), { addSuffix: true })}

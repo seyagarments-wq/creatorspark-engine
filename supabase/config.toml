@@ -15,7 +15,7 @@ verify_jwt = false
 [functions.process-bulk-payouts]
 verify_jwt = false
 
-[functions.calculate-monthly-payouts]
+[functions.payout-cycle]
 verify_jwt = false
 
 [functions.instagram-oauth]
@@ -99,9 +99,6 @@ verify_jwt = false
 [functions.video-lookup]
 verify_jwt = false
 
-[functions.pay-accrued-commission]
-verify_jwt = false
-
 [functions.notify-chat-message]
 verify_jwt = false
 
@@ -136,9 +133,6 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.ads-ai-command]
-verify_jwt = false
-
-[functions.pay-paypal-commission]
 verify_jwt = false
 
 [functions.platform-setup]
