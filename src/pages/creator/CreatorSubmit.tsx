@@ -25,12 +25,19 @@ import {
   Camera,
   Send,
   ExternalLink,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import confetti from "canvas-confetti";
 import { playSoundEffect } from "@/hooks/use-sound-effects";
 import { generateUniqueVideoId } from "@/lib/video-id";
+import type { Database } from "@/integrations/supabase/types";
+import { uploadResumable, describeUploadFailure } from "@/lib/resumable-upload";
+import { checkVideoFile, fileExtension, formatBytes, MAX_VIDEO_LABEL } from "@/lib/upload-limits";
+import { beginUpload } from "@/lib/upload-guard";
 
 const fireConfetti = () => {
   const count = 200;
@@ -83,10 +90,24 @@ interface Brand {
   logo_url: string | null;
 }
 
+type UploadStatus = "queued" | "uploading" | "done" | "failed";
+type VideoInsert = Database["public"]["Tables"]["videos"]["Insert"];
+
 interface UploadedVideo {
   file: File;
   title: string;
   preGeneratedVideoId?: string; // Pre-generated V-ID so title can reference the sequence
+  contentType: string; // resolved MIME type sent to storage
+  status: UploadStatus;
+  progress: number; // 0..1 of this file's bytes
+  error?: string; // plain-language reason when status === "failed"
+  videoUrl?: string | null;
+  thumbnailUrl?: string | null;
+}
+
+interface RejectedFile {
+  name: string;
+  reason: string;
 }
 
 export default function CreatorSubmit() {
@@ -99,7 +120,12 @@ export default function CreatorSubmit() {
   const [videoFiles, setVideoFiles] = useState<UploadedVideo[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [byteProgress, setByteProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 });
   const [currentUploadIndex, setCurrentUploadIndex] = useState(0);
+  const [rejectedFiles, setRejectedFiles] = useState<RejectedFile[]>([]);
+  // tus fires progress many times a second; re-rendering this page that often on a
+  // phone is wasteful, so progress state is updated at most ~4 times a second.
+  const lastProgressPaint = useRef(0);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [submittedCount, setSubmittedCount] = useState(0);
   const [loadingBrands, setLoadingBrands] = useState(true);
@@ -344,33 +370,54 @@ export default function CreatorSubmit() {
     return urlData.publicUrl;
   }
 
-  async function uploadVideoFile(file: File): Promise<string | null> {
+  function patchVideo(index: number, patch: Partial<UploadedVideo>) {
+    setVideoFiles((prev) => prev.map((v, i) => (i === index ? { ...v, ...patch } : v)));
+  }
+
+  // Resumable upload of one video. Chunked, retried, resumable, real progress.
+  // See src/lib/resumable-upload.ts for why this is not storage.upload().
+  async function uploadVideoFile(
+    video: UploadedVideo,
+    onProgress: (uploaded: number, total: number) => void,
+  ): Promise<string | null> {
     if (!user) return null;
 
-    const fileExt = file.name.split(".").pop();
-    const fileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+    const ext = fileExtension(video.file.name) || "mp4";
+    const objectName = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 11)}.${ext}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from("videos")
-      .upload(fileName, file, {
-        cacheControl: "3600",
-        upsert: false,
-      });
+    await uploadResumable(video.file, {
+      bucket: "videos",
+      objectName,
+      contentType: video.contentType,
+      cacheControl: "3600",
+      onProgress,
+    });
 
-    if (uploadError) {
-      console.error("Upload error:", uploadError);
-      throw uploadError;
-    }
-
-    const { data: urlData } = supabase.storage
-      .from("videos")
-      .getPublicUrl(fileName);
-
+    const { data: urlData } = supabase.storage.from("videos").getPublicUrl(objectName);
     return urlData.publicUrl;
   }
 
   async function handleFilesSelected(files: FileList | null) {
-    if (!files) return;
+    // Let the same file be picked again after a remove/retry.
+    const input = document.getElementById("video-input") as HTMLInputElement | null;
+    if (input) input.value = "";
+
+    if (!files || files.length === 0) return;
+
+    // Pre-flight: size and type are checked the moment the file is picked, so a
+    // 1.4 GB clip is refused here with the limit named, not 30 seconds into an upload.
+    const accepted: { file: File; contentType: string }[] = [];
+    const rejected: RejectedFile[] = [];
+    for (const file of Array.from(files)) {
+      const check = checkVideoFile(file);
+      if (check.ok === false) {
+        rejected.push({ name: file.name, reason: check.reason });
+        continue;
+      }
+      accepted.push({ file, contentType: check.contentType });
+    }
+    if (rejected.length > 0) setRejectedFiles((prev) => [...prev, ...rejected]);
+    if (accepted.length === 0) return;
 
     // Fetch creator's first name for auto-titling
     let firstName = "Creator";
@@ -387,11 +434,9 @@ export default function CreatorSubmit() {
     }
 
     // Pre-generate V-IDs for each file so we can derive the sequence number for the title
-    const videoIdResults = await Promise.all(
-      Array.from(files).map(() => generateUniqueVideoId())
-    );
+    const videoIdResults = await Promise.all(accepted.map(() => generateUniqueVideoId()));
 
-    const newVideos: UploadedVideo[] = Array.from(files).map((file, index) => {
+    const newVideos: UploadedVideo[] = accepted.map(({ file, contentType }, index) => {
       const preGeneratedVideoId = videoIdResults[index];
       // Extract sequence from V-ID: "V220-7" → "7"
       const sequence = preGeneratedVideoId.split("-")[1] ?? String(index + 1);
@@ -399,6 +444,9 @@ export default function CreatorSubmit() {
         file,
         title: `${firstName}#${sequence}`,
         preGeneratedVideoId,
+        contentType,
+        status: "queued",
+        progress: 0,
       };
     });
 
@@ -417,6 +465,7 @@ export default function CreatorSubmit() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (isUploading) return;
 
     if (!brandId) {
       toast({
@@ -447,59 +496,90 @@ export default function CreatorSubmit() {
       return;
     }
 
+    // Retry semantics: videos already "done" from a previous attempt are skipped,
+    // so pressing Retry after a failure picks up with the file that failed.
+    const pending = videoFiles.filter((v) => v.status !== "done");
+    const totalBytes = pending.reduce((sum, v) => sum + v.file.size, 0);
+    let doneBytes = 0;
+    let successCount = videoFiles.length - pending.length;
+    let failed = false;
+
     setIsUploading(true);
     setUploadProgress(0);
-    setCurrentUploadIndex(0);
+    setByteProgress({ done: 0, total: totalBytes });
+    const endUpload = beginUpload();
 
     try {
-      const totalVideos = videoFiles.length;
-      let successCount = 0;
-
       for (let i = 0; i < videoFiles.length; i++) {
-        setCurrentUploadIndex(i);
         const video = videoFiles[i];
+        if (video.status === "done") continue;
 
-        const baseProgress = (i / totalVideos) * 100;
-        const videoProgress = (1 / totalVideos) * 100;
+        setCurrentUploadIndex(i);
+        patchVideo(i, { status: "uploading", error: undefined, progress: 0 });
 
-        setUploadProgress(Math.round(baseProgress + videoProgress * 0.05));
+        try {
+          // Use pre-generated V-ID if available (avoids double-generating and keeps title in sync)
+          const uniqueVideoId = video.preGeneratedVideoId ?? (await generateUniqueVideoId());
 
-        // Use pre-generated V-ID if available (avoids double-generating and keeps title in sync)
-        const [uniqueVideoId, thumbnailBlob] = await Promise.all([
-          video.preGeneratedVideoId ? Promise.resolve(video.preGeneratedVideoId) : generateUniqueVideoId(),
-          generateThumbnail(video.file),
-        ]);
+          const videoUrl = await uploadVideoFile(video, (uploaded, total) => {
+            const now = Date.now();
+            if (now - lastProgressPaint.current < 250 && uploaded < total) return;
+            lastProgressPaint.current = now;
+            const overallDone = doneBytes + uploaded;
+            setByteProgress({ done: overallDone, total: totalBytes });
+            setUploadProgress(totalBytes > 0 ? Math.min(99, Math.floor((overallDone / totalBytes) * 100)) : 0);
+            patchVideo(i, { progress: total > 0 ? uploaded / total : 0 });
+          });
+          doneBytes += video.file.size;
 
-        setUploadProgress(Math.round(baseProgress + videoProgress * 0.15));
+          // Thumbnail AFTER the video, not in parallel with it: a phone browser
+          // holding a video element, a canvas and an in-flight upload at once is
+          // what runs it out of memory. Non-fatal if it fails.
+          let thumbnailUrl: string | null = null;
+          try {
+            const thumbnailBlob = await generateThumbnail(video.file);
+            if (thumbnailBlob && user) thumbnailUrl = await uploadThumbnail(thumbnailBlob, user.id);
+          } catch (thumbErr) {
+            console.error("Thumbnail failed (non-fatal):", thumbErr);
+          }
 
-        // Upload thumbnail and video file in parallel
-        const [thumbnailUrl, videoUrl] = await Promise.all([
-          thumbnailBlob && user ? uploadThumbnail(thumbnailBlob, user.id) : Promise.resolve(null),
-          uploadVideoFile(video.file),
-        ]);
+          const insertData: VideoInsert = {
+            creator_id: profileId,
+            unique_video_id: uniqueVideoId,
+            title: video.title.trim() || video.file.name.replace(/\.[^/.]+$/, ""),
+            video_url: videoUrl,
+            thumbnail_url: thumbnailUrl,
+            brand_id: brandId,
+            status: "pending",
+          };
 
-        setUploadProgress(Math.round(baseProgress + videoProgress * 0.85));
+          if (selectedBountyId && selectedBountyId !== "none") {
+            insertData.bounty_id = selectedBountyId;
+          }
 
-        const insertData: any = {
-          creator_id: profileId,
-          unique_video_id: uniqueVideoId,
-          title: video.title.trim() || video.file.name.replace(/\.[^/.]+$/, ""),
-          video_url: videoUrl,
-          thumbnail_url: thumbnailUrl,
-          brand_id: brandId,
-          status: "pending",
-        };
+          const { error } = await supabase.from("videos").insert(insertData);
+          if (error) throw error;
 
-        if (selectedBountyId && selectedBountyId !== "none") {
-          insertData.bounty_id = selectedBountyId;
+          successCount++;
+          patchVideo(i, { status: "done", progress: 1, videoUrl, thumbnailUrl });
+          setByteProgress({ done: doneBytes, total: totalBytes });
+          setUploadProgress(totalBytes > 0 ? Math.floor((doneBytes / totalBytes) * 100) : 100);
+        } catch (err) {
+          const { message } = describeUploadFailure(err);
+          console.error("Upload failed:", err);
+          patchVideo(i, { status: "failed", error: message });
+          failed = true;
+          break; // stop here; Retry resumes this file and continues with the rest
         }
+      }
 
-        const { error } = await supabase.from("videos").insert(insertData);
-
-        if (error) throw error;
-
-        successCount++;
-        setUploadProgress(Math.round(baseProgress + videoProgress));
+      if (failed) {
+        toast({
+          title: "Upload didn't finish",
+          description: "Your files are still here. See the message below, then press Retry.",
+          variant: "destructive",
+        });
+        return;
       }
 
       setUploadProgress(100);
@@ -572,14 +652,16 @@ export default function CreatorSubmit() {
       } catch (notifyError) {
         console.error("Failed to send submission notification:", notifyError);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      // Anything outside the per-video handling above (should be rare).
       console.error("Upload error:", error);
       toast({
         title: "Upload failed",
-        description: error.message || "Failed to submit videos",
+        description: (error instanceof Error && error.message) || "Something went wrong. Your files are still here, press Retry.",
         variant: "destructive",
       });
     } finally {
+      endUpload();
       setIsUploading(false);
     }
   }
@@ -606,9 +688,11 @@ export default function CreatorSubmit() {
                 onClick={() => {
                   setUploadSuccess(false);
                   setVideoFiles([]);
+                  setRejectedFiles([]);
                   setBrandId(brands.length === 1 ? brands[0].id : "");
                   setSelectedBountyId("none");
                   setUploadProgress(0);
+                  setByteProgress({ done: 0, total: 0 });
                   setSubmittedCount(0);
                 }}
               >
@@ -743,10 +827,10 @@ export default function CreatorSubmit() {
                 <Label>Submit for a Bounty (optional)</Label>
                 <Select value={selectedBountyId} onValueChange={setSelectedBountyId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="None — counts toward monthly guarantee" />
+                    <SelectValue placeholder="None" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">None — counts toward monthly guarantee</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {activeBounties.map((bounty) => (
                       <SelectItem key={bounty.id} value={bounty.id}>
                         {bounty.title}
@@ -756,8 +840,8 @@ export default function CreatorSubmit() {
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   {selectedBountyId && selectedBountyId !== "none"
-                    ? "⚡ This upload will count toward the selected bounty but NOT the monthly $500 guarantee."
-                    : "Videos not tagged to a bounty count toward your 35-video monthly guarantee."}
+                    ? "This upload counts toward the selected bounty and is paid at the bounty amount."
+                    : "Only tag a bounty if this video is for one. Everything else is a regular submission."}
                 </p>
               </div>
             )}
@@ -806,9 +890,37 @@ export default function CreatorSubmit() {
                   {isDragOver ? "Drop to upload!" : "Click to upload or drag and drop"}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  MP4, MOV, or WebM (max 500MB each) — Select multiple files
+                  MP4 or MOV, up to {MAX_VIDEO_LABEL} each. You can pick several at once.
                 </p>
               </div>
+
+              {rejectedFiles.length > 0 && (
+                <Alert variant="destructive" className="relative">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>
+                    {rejectedFiles.length === 1 ? "1 file was not added" : `${rejectedFiles.length} files were not added`}
+                  </AlertTitle>
+                  <AlertDescription>
+                    <ul className="mt-1 space-y-1 text-sm">
+                      {rejectedFiles.map((r, i) => (
+                        <li key={`${r.name}-${i}`} className="break-words">
+                          <span className="font-medium">{r.name}</span>: {r.reason}
+                        </li>
+                      ))}
+                    </ul>
+                  </AlertDescription>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-2 top-2 h-7 w-7"
+                    onClick={() => setRejectedFiles([])}
+                    aria-label="Dismiss"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </Alert>
+              )}
             </div>
 
             {/* Video list with titles */}
@@ -832,35 +944,65 @@ export default function CreatorSubmit() {
                           className="mb-1"
                         />
                         <p className="text-xs text-muted-foreground truncate">
-                          {video.file.name} • {(video.file.size / (1024 * 1024)).toFixed(1)} MB
+                          {video.file.name} • {formatBytes(video.file.size)}
+                          {video.status === "uploading" && ` • ${Math.floor(video.progress * 100)}%`}
+                          {video.status === "done" && " • Uploaded"}
                         </p>
+                        {video.status === "uploading" && (
+                          <Progress value={Math.floor(video.progress * 100)} className="h-1 mt-1" />
+                        )}
+                        {video.status === "failed" && video.error && (
+                          <p className="text-xs text-destructive mt-1 break-words">{video.error}</p>
+                        )}
                       </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="flex-shrink-0"
-                        onClick={() => removeVideo(index)}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
+                      {video.status === "done" ? (
+                        <CheckCircle className="w-5 h-5 text-success flex-shrink-0" />
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="flex-shrink-0"
+                          onClick={() => removeVideo(index)}
+                          disabled={isUploading}
+                          aria-label="Remove video"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Upload progress */}
+            {/* Upload progress: driven by bytes actually sent */}
             {isUploading && (
               <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">
-                    Uploading video {currentUploadIndex + 1} of {videoFiles.length}...
+                <div className="flex items-center justify-between text-sm gap-3">
+                  <span className="text-muted-foreground truncate">
+                    Uploading video {currentUploadIndex + 1} of {videoFiles.length}
+                    {byteProgress.total > 0 && ` · ${formatBytes(byteProgress.done)} of ${formatBytes(byteProgress.total)}`}
                   </span>
-                  <span className="font-medium">{uploadProgress}%</span>
+                  <span className="font-medium flex-shrink-0">{uploadProgress}%</span>
                 </div>
                 <Progress value={uploadProgress} className="h-2" />
+                <p className="text-xs text-muted-foreground">
+                  Keep this page open. If your connection drops, the upload resumes where it stopped.
+                </p>
               </div>
+            )}
+
+            {/* Failure: stays until dealt with. Files are kept so Retry is one tap. */}
+            {!isUploading && videoFiles.some((v) => v.status === "failed") && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Upload didn't finish</AlertTitle>
+                <AlertDescription>
+                  {videoFiles.find((v) => v.status === "failed")?.error}
+                  {" "}Your files are still listed above. Press Retry to continue from where it stopped.
+                </AlertDescription>
+              </Alert>
             )}
 
             {/* Submit */}
@@ -879,7 +1021,10 @@ export default function CreatorSubmit() {
                 disabled={isUploading || videoFiles.length === 0 || !brandId}
               >
                 {isUploading && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
-                Submit {videoFiles.length > 0 ? `${videoFiles.length} Video${videoFiles.length > 1 ? "s" : ""}` : "Videos"}
+                {!isUploading && videoFiles.some((v) => v.status === "failed") && <RefreshCw className="w-4 h-4 mr-2" />}
+                {videoFiles.some((v) => v.status === "failed")
+                  ? "Retry upload"
+                  : `Submit ${videoFiles.length > 0 ? `${videoFiles.length} Video${videoFiles.length > 1 ? "s" : ""}` : "Videos"}`}
               </Button>
             </div>
           </form>

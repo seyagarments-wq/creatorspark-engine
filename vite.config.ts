@@ -63,6 +63,13 @@ export default defineConfig(({ mode }) => ({
         navigateFallbackDenylist: [/^\/~oauth/, /^\/api/],
         runtimeCaching: [
           {
+            // Storage traffic (video uploads, video/thumbnail fetches) must never be
+            // cached or buffered by the service worker. Listed first so it wins over
+            // the generic Supabase rule below.
+            urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/v1\/.*/i,
+            handler: "NetworkOnly",
+          },
+          {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
             handler: "NetworkFirst",
             options: {
