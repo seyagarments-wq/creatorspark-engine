@@ -1,5 +1,6 @@
 import { useRegisterSW } from 'virtual:pwa-register/react';
 import { useEffect } from 'react';
+import { isUploadInFlight, whenUploadsIdle } from '@/lib/upload-guard';
 
 export function PWAUpdatePrompt() {
   const {
@@ -26,14 +27,26 @@ export function PWAUpdatePrompt() {
     },
   });
 
-  // Immediately apply update and reload when a new SW is detected
+  // Apply the update and reload when a new SW is detected, but never while a
+  // creator has an upload in flight: a reload mid-upload throws the file away
+  // with no error shown. Wait for the upload to finish, then reload.
   useEffect(() => {
-    if (needRefresh) {
+    if (!needRefresh) return;
+    let cancelled = false;
+    const apply = async () => {
+      if (isUploadInFlight()) {
+        console.log('[PWA] New version detected, waiting for uploads to finish...');
+        await whenUploadsIdle();
+      }
+      if (cancelled) return;
       console.log('[PWA] New version detected, applying silently...');
-      updateServiceWorker(true).then(() => {
-        window.location.reload();
-      });
-    }
+      await updateServiceWorker(true);
+      if (!cancelled) window.location.reload();
+    };
+    apply();
+    return () => {
+      cancelled = true;
+    };
   }, [needRefresh, updateServiceWorker]);
 
   // No visible UI — updates are fully automatic

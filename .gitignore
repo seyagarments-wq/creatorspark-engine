@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Vercel installs with bun from bun.lock; an npm lockfile here pulls different versions and fakes type errors
+package-lock.json
