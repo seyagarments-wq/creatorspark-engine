@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { DEFAULT_UPLOAD_WEEKDAY, isWeekday, type Weekday } from "@/lib/upload-day";
 
 interface CommissionSettings {
   default: number;
@@ -35,12 +36,17 @@ interface AnalyticsSettings {
   creator_metrics: CreatorMetricsSettings;
 }
 
+export interface UploadScheduleSettings {
+  weekday: Weekday;
+}
+
 interface AppSettings {
   commission: CommissionSettings;
   payout_threshold: PayoutThresholdSettings;
   video_review: VideoReviewSettings;
   notifications: NotificationSettings;
   analytics: AnalyticsSettings;
+  upload_schedule: UploadScheduleSettings;
 }
 
 const defaultSettings: AppSettings = {
@@ -52,6 +58,7 @@ const defaultSettings: AppSettings = {
     timezone: "America/Los_Angeles",
     creator_metrics: { impressions: true, link_clicks: true, link_ctr: false, conversions: true, aov: false },
   },
+  upload_schedule: { weekday: DEFAULT_UPLOAD_WEEKDAY },
 };
 
 export function useSettings() {
@@ -78,6 +85,12 @@ export function useSettings() {
           if (row.key === "video_review") settingsMap.video_review = row.value as unknown as VideoReviewSettings;
           if (row.key === "notifications") settingsMap.notifications = row.value as unknown as NotificationSettings;
           if (row.key === "analytics") settingsMap.analytics = row.value as unknown as AnalyticsSettings;
+          if (row.key === "upload_schedule") {
+            const weekday = (row.value as { weekday?: unknown } | null)?.weekday;
+            settingsMap.upload_schedule = {
+              weekday: isWeekday(weekday) ? weekday : DEFAULT_UPLOAD_WEEKDAY,
+            };
+          }
         });
         setSettings({ ...defaultSettings, ...settingsMap });
       }

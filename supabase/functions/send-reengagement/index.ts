@@ -44,7 +44,6 @@ serve(async (req) => {
     const appUrl = (await getSecret("APP_URL")) || "https://creatorsctrl.com";
 
     const now = new Date();
-    const monthKey = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-01`;
     const threeDaysAgo = new Date(now);
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
     const thirtyDaysAgo = new Date(now);
@@ -109,26 +108,10 @@ serve(async (req) => {
           continue;
         }
 
-        const { data: elig } = await supabase
-          .from("creator_monthly_eligibility")
-          .select("missed_days, status")
-          .eq("creator_id", profile.id)
-          .eq("month", monthKey)
-          .maybeSingle();
-
-        const missed = elig?.missed_days ?? 0;
-        const isLocked = elig?.status === "ineligible" || missed >= 3;
-
-        const subject = isLocked
-          ? "🔒 You forfeited this month — but next month is wide open"
-          : `⚠️ ${missed}/3 missed days — your commission is on the line`;
-
-        const body = isLocked
-          ? `You hit 3 missed required days, so this month's commission is forfeited per the cohort agreement. No rollover.\n\nBut here's the deal: the 1st resets EVERYTHING. Clean board. Fresh 12 required days. New shot at the full month.\n\nUse the rest of this month to dial in your process so when the new month hits, you're ready to go 12-for-12. Don't waste the comeback.`
-          : `You've been ghost for a few days — and you're already at <strong>${missed}/3</strong> missed required days this month.\n\nReminder of the cohort rules:\n• Required days: Tue / Thu / Sat\n• Minimum: 4 approved videos per required day\n• Hit a 4th miss = this month's commission is GONE. No rollover. No appeal.\n\nThis isn't a "we miss you" email. This is your earnings on the line. Get back on the board today.`;
-
-        const cta = isLocked ? "See Next Month's Plan" : "Get Back on the Board";
-        const link = isLocked ? `${appUrl}/creator/calendar` : `${appUrl}/creator/submit`;
+        const subject = "It's been a few days. Anything ready to send in?";
+        const body = `It's been a few days since your last upload. No penalty, nothing is on the line. This is just a nudge.\n\nEvery approved video pays $65, credited the moment it's approved. Whatever you have filmed, send it in and get it reviewed.`;
+        const cta = "Submit a video";
+        const link = `${appUrl}/creator/submit`;
 
         await fetch("https://api.resend.com/emails", {
           method: "POST",

@@ -2,8 +2,6 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { Progress } from "@/components/ui/progress";
-import { StreakIndicator } from "@/components/gamification/StreakIndicator";
-import { useCreatorProgress } from "@/hooks/use-creator-progress";
 import { REVIEW_CATEGORIES, scoreVerdict } from "@/lib/review-config";
 import { cn } from "@/lib/utils";
 import { TrendingUp, Sparkles, Loader2 } from "lucide-react";
@@ -28,7 +26,6 @@ interface Point {
 
 export function GrowthTracker({ className }: GrowthTrackerProps) {
   const { profileId } = useAuth();
-  const { progress } = useCreatorProgress();
   const [loading, setLoading] = useState(true);
   const [points, setPoints] = useState<Point[]>([]);
   const [averages, setAverages] = useState<Record<string, number>>({});
@@ -97,22 +94,9 @@ export function GrowthTracker({ className }: GrowthTrackerProps) {
 
   return (
     <div className={cn("rounded-xl border bg-card overflow-hidden", className)}>
-      <div className="px-4 py-3 border-b bg-muted/40 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-primary" />
-          <span className="text-sm font-semibold">Your growth</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">
-            Level <span className="font-semibold text-foreground">{progress.currentLevel}</span>
-          </span>
-          <StreakIndicator
-            currentStreak={progress.currentStreak}
-            longestStreak={progress.longestStreak}
-            size="sm"
-            showLabel={false}
-          />
-        </div>
+      <div className="px-4 py-3 border-b bg-muted/40 flex items-center gap-2">
+        <TrendingUp className="w-4 h-4 text-primary" />
+        <span className="text-sm font-semibold">Your growth</span>
       </div>
 
       {loading ? (

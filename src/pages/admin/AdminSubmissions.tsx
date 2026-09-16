@@ -525,7 +525,7 @@ export default function AdminSubmissions() {
           body: {
             user_id: video.creator?.user_id,
             title: "Video approved",
-            message: `Your video "${video.title}" has been approved and is now in use.${feedbackText}\n\nKeep your upload schedule consistent — that consistency is what keeps your commission on track.`,
+            message: `Your video "${video.title}" has been approved and is now in use. It counts toward your pay.${feedbackText}`,
             notification_type: "video",
             link: "/creator/my-videos",
             button_text: "View your video",
@@ -880,8 +880,8 @@ export default function AdminSubmissions() {
             user_id: creatorInfo.userId,
             title: count > 1 ? `${count} videos approved` : "Video approved",
             message: count > 1 
-              ? `${count} of your videos have been approved and are now in use.\n\nKeep your upload schedule consistent — that consistency is what keeps your commission on track.`
-              : `Your video "${creatorInfo.videoTitles[0]}" has been approved and is now in use.\n\nKeep your upload schedule consistent — that consistency is what keeps your commission on track.`,
+              ? `${count} of your videos have been approved and are now in use. They count toward your pay.`
+              : `Your video "${creatorInfo.videoTitles[0]}" has been approved and is now in use. It counts toward your pay.`,
             notification_type: "video",
             link: "/creator/my-videos",
             button_text: "View your videos",

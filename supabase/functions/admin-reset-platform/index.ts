@@ -54,36 +54,6 @@ serve(async (req) => {
     const { action } = body;
 
     if (action === "reset_creators") {
-      // Reset all gamification data
-      const { error: gamErr } = await supabase
-        .from("creator_gamification")
-        .update({
-          total_xp: 0,
-          current_level: 1,
-          current_streak: 0,
-          longest_streak: 0,
-          weekly_challenge_progress: 0,
-          weekly_challenge_completed: false,
-          last_activity_date: null,
-        })
-        .neq("id", "00000000-0000-0000-0000-000000000000");
-
-      if (gamErr) {
-        console.error("Gamification reset error:", gamErr);
-        throw gamErr;
-      }
-
-      // Delete challenge completions
-      const { error: compErr } = await supabase
-        .from("creator_challenge_completions")
-        .delete()
-        .neq("id", "00000000-0000-0000-0000-000000000000");
-
-      if (compErr) {
-        console.error("Challenge completions delete error:", compErr);
-        throw compErr;
-      }
-
       // Delete payouts
       const { error: payErr } = await supabase
         .from("payouts")
@@ -188,28 +158,6 @@ serve(async (req) => {
           console.log("Thumbnail storage delete:", thumbErr || "success");
         }
       }
-
-      // 5. Reset all gamification data
-      const { error: gamErr } = await supabase
-        .from("creator_gamification")
-        .update({
-          total_xp: 0,
-          current_level: 1,
-          current_streak: 0,
-          longest_streak: 0,
-          weekly_challenge_progress: 0,
-          weekly_challenge_completed: false,
-          last_activity_date: null,
-        })
-        .neq("id", "00000000-0000-0000-0000-000000000000");
-
-      if (gamErr) console.error("Gamification reset error:", gamErr);
-
-      // 6. Delete challenge completions
-      await supabase
-        .from("creator_challenge_completions")
-        .delete()
-        .neq("id", "00000000-0000-0000-0000-000000000000");
 
       // 7. Delete payouts
       await supabase
@@ -355,14 +303,8 @@ serve(async (req) => {
       // Delete creator bounties
       await supabase.from("creator_bounties").delete().eq("creator_id", creator_id);
 
-      // Delete challenge completions
-      await supabase.from("creator_challenge_completions").delete().eq("creator_id", creator_id);
-
       // Delete payouts
       await supabase.from("payouts").delete().eq("creator_id", creator_id);
-
-      // Delete gamification
-      await supabase.from("creator_gamification").delete().eq("creator_id", creator_id);
 
       // Delete creator brands
       await supabase.from("creator_brands").delete().eq("creator_id", creator_id);

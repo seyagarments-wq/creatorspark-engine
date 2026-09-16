@@ -1,11 +1,9 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
-import { playSoundEffect } from "@/hooks/use-sound-effects";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import StatCard from "@/components/stats/StatCard";
-import { EligibilityStatusBanner } from "@/components/creator/EligibilityStatusBanner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -56,7 +54,6 @@ interface MetaStats {
 
 export default function CreatorDashboard() {
   const { profileId } = useAuth();
-  const streakCelebrated = useRef(false);
   const [stats, setStats] = useState<DashboardStats>({
     totalVideos: 0,
     pendingVideos: 0,
@@ -84,25 +81,6 @@ export default function CreatorDashboard() {
     if (profileId) {
       fetchDashboardData();
     }
-  }, [profileId]);
-
-  // 🔥 Streak welcome-back — once per session per day
-  useEffect(() => {
-    if (!profileId || streakCelebrated.current) return;
-    const key = `streak_welcome_${new Date().toDateString()}`;
-    if (sessionStorage.getItem(key)) return;
-    supabase
-      .from("creator_gamification")
-      .select("current_streak")
-      .eq("creator_id", profileId)
-      .single()
-      .then(({ data }) => {
-        if (data && (data as any).current_streak > 0) {
-          sessionStorage.setItem(key, "1");
-          streakCelebrated.current = true;
-          setTimeout(() => { try { playSoundEffect("notification", false); } catch {/* ignore */} }, 800);
-        }
-      });
   }, [profileId]);
 
   async function fetchDashboardData() {
@@ -269,7 +247,6 @@ export default function CreatorDashboard() {
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        <EligibilityStatusBanner />
         {/* Welcome section */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
@@ -550,7 +527,7 @@ export default function CreatorDashboard() {
             <Trophy className="w-12 h-12 text-warning mx-auto mb-4" />
             <h3 className="font-medium mb-2">Check out available bounties</h3>
             <p className="text-sm text-muted-foreground">
-              Complete bounties to earn bonus rewards
+              Each bounty pays a set bonus when you hit its target
             </p>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useDebouncedCallback } from "@/hooks/use-debounced-callback";
 
 import { Link } from "react-router-dom";
@@ -11,16 +11,9 @@ import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StripeConnectionBanner } from "@/components/creator/StripeConnectionBanner";
 import { CreatorOnboarding } from "@/components/creator/CreatorOnboarding";
-import { EligibilityStatusBanner } from "@/components/creator/EligibilityStatusBanner";
-import { PayoutRulesCard } from "@/components/creator/PayoutRulesCard";
-import { MilestoneCelebration } from "@/components/MilestoneCelebration";
-import { CreatorProgressCard } from "@/components/gamification/CreatorProgressCard";
-import { WeeklyChallengesCard } from "@/components/gamification/WeeklyChallengesCard";
-import { StreakIndicator } from "@/components/gamification/StreakIndicator";
-import { ConsistencyTracker } from "@/components/gamification/ConsistencyTracker";
-import { ConsistencyLeaderboard } from "@/components/gamification/ConsistencyLeaderboard";
 import { playSoundEffect } from "@/hooks/use-sound-effects";
-import { useCreatorProgress } from "@/hooks/use-creator-progress";
+import { useSettings } from "@/hooks/use-settings";
+import { weekdayLabel } from "@/lib/upload-day";
 import {
   Video,
   DollarSign,
@@ -32,7 +25,6 @@ import {
   ShoppingCart,
   Trophy,
   ArrowRight,
-  Sparkles,
   Flame,
   BarChart3,
   AlertCircle,
@@ -42,15 +34,15 @@ import {
 import { VideoThumbnail } from "@/components/video/VideoThumbnail";
 import { VideoPreviewDialog } from "@/components/video/VideoPreviewDialog";
 
+/** Flat rate credited for every approved video. */
+const PER_VIDEO_RATE = 65;
+
 interface DashboardStats {
   totalVideos: number;
   approvedVideos: number;
   pendingVideos: number;
   totalEarnings: number;
-  thirtyDayEarnings: number;
   approvalRate: number;
-  commissionRate: number;
-  approvedThisMonth: number;
 }
 
 interface RecentVideo {
@@ -84,31 +76,20 @@ interface TopVideo {
 
 export default function CreatorHome() {
   const { profileId, user } = useAuth();
-  // NOTE: useCreatorProgress is also called inside CreatorProgressCard — we only need
-  // the streak fields here for the hero section display. We pull them from the same
-  // hook so React can deduplicate; the hook already guards with useCallback/useEffect.
-  const { progress } = useCreatorProgress();
+  const { settings } = useSettings();
   const [stats, setStats] = useState<DashboardStats>({
     totalVideos: 0,
     approvedVideos: 0,
     pendingVideos: 0,
     totalEarnings: 0,
-    thirtyDayEarnings: 0,
     approvalRate: 0,
-    commissionRate: 10,
-    approvedThisMonth: 0,
   });
   const [recentVideos, setRecentVideos] = useState<RecentVideo[]>([]);
   const [activeBounties, setActiveBounties] = useState<ActiveBounty[]>([]);
   const [topVideosThisWeek, setTopVideosThisWeek] = useState<TopVideo[]>([]);
   const [creatorName, setCreatorName] = useState("Creator");
   const [loading, setLoading] = useState(true);
-  const [showMilestoneCelebration, setShowMilestoneCelebration] = useState(false);
   const [selectedTopVideo, setSelectedTopVideo] = useState<TopVideo | null>(null);
-  
-  const previousApprovedThisMonth = useRef<number | null>(null);
-
-
 
   const handleRealtimeNotification = useCallback((payload: any) => {
     const { notification_type } = payload.new || {};
@@ -258,12 +239,12 @@ export default function CreatorHome() {
 
       // Fetch profile, videos, payouts, and bounties ALL in parallel
       const [profileRes, videosRes, payoutsRes, bountiesRes] = await Promise.all([
-        supabase.from("profiles").select("full_name, commission_percentage").eq("id", profileId).single(),
+        supabase.from("profiles").select("full_name").eq("id", profileId).single(),
         supabase.from("videos").select(`
           id, title, status, created_at, bounty_id,
           performance_data(impressions, purchases, revenue, metric_date)
         `).eq("creator_id", profileId).order("created_at", { ascending: false }),
-        supabase.from("payouts").select("amount, created_at, payout_type, status").eq("creator_id", profileId).in("status", ["paid", "pending", "approved"]).in("payout_type", ["bounty", "challenge", "weekly_challenge"]),
+        supabase.from("payouts").select("amount").eq("creator_id", profileId).in("status", ["paid", "pending", "approved"]).eq("payout_type", "bounty"),
         supabase.from("bounties").select("*").eq("status", "active"),
       ]);
 
@@ -276,77 +257,22 @@ export default function CreatorHome() {
         setCreatorName(profile.full_name?.split(" ")[0] || "Creator");
       }
 
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const thirtyDayWindowStart = thirtyDaysAgo.toISOString().split("T")[0];
-
-      const monthStart = new Date();
-      monthStart.setDate(1);
-      monthStart.setHours(0, 0, 0, 0);
-
       const totalVideos = videos?.length || 0;
       const approvedVideos = videos?.filter((v) => v.status === "approved").length || 0;
       const pendingVideos = videos?.filter((v) => v.status === "pending" || v.status === "saved_for_later").length || 0;
       const approvalRate = totalVideos > 0 ? Math.round((approvedVideos / totalVideos) * 100) : 0;
 
-      const approvedThisMonth = videos?.filter(
-        (v: any) => v.status === "approved" && new Date(v.created_at) >= monthStart && !v.bounty_id
-      ).length || 0;
-
-      const commissionRate = profile?.commission_percentage || 10;
-
-      let totalRevenueAllTime = 0;
-      let totalRevenueThirtyDays = 0;
-
-      videos?.forEach((video: any) => {
-        (video.performance_data || []).forEach((pd: any) => {
-          const revenue = parseFloat(pd.revenue) || 0;
-          totalRevenueAllTime += revenue;
-          const metricDate = pd.metric_date as string | undefined;
-          if (metricDate && metricDate >= thirtyDayWindowStart) {
-            totalRevenueThirtyDays += revenue;
-          }
-        });
-      });
-
-      const commissionEarnings = totalRevenueAllTime * (commissionRate / 100);
-      const thirtyDayCommission = totalRevenueThirtyDays * (commissionRate / 100);
-
-      let totalRewards = 0;
-      let thirtyDayRewards = 0;
-
-      payouts?.forEach((p) => {
-        const amount = parseFloat(p.amount as any) || 0;
-        totalRewards += amount;
-        if (new Date(p.created_at) >= thirtyDaysAgo) {
-          thirtyDayRewards += amount;
-        }
-      });
-
-      const totalEarnings = commissionEarnings + totalRewards;
-      const thirtyDayEarnings = thirtyDayCommission + thirtyDayRewards;
-
-      const milestoneKey = `milestone_35_${new Date().getFullYear()}_${new Date().getMonth()}`;
-      const alreadyCelebrated = localStorage.getItem(milestoneKey);
-      
-      if (approvedThisMonth >= 35 && !alreadyCelebrated) {
-        setTimeout(() => {
-          setShowMilestoneCelebration(true);
-          localStorage.setItem(milestoneKey, "true");
-        }, 500);
-      }
-      
-      previousApprovedThisMonth.current = approvedThisMonth;
+      // Bounty videos pay the bounty amount instead of the per-video rate.
+      const approvedNonBounty = videos?.filter((v) => v.status === "approved" && !v.bounty_id).length || 0;
+      const bountyEarnings = payouts?.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) || 0;
+      const totalEarnings = approvedNonBounty * PER_VIDEO_RATE + bountyEarnings;
 
       setStats({
         totalVideos,
         approvedVideos,
         pendingVideos,
         totalEarnings,
-        thirtyDayEarnings,
         approvalRate,
-        commissionRate,
-        approvedThisMonth,
       });
 
       const recent = videos?.slice(0, 5).map((v) => ({
@@ -406,6 +332,13 @@ export default function CreatorHome() {
     return num.toString();
   };
 
+  const formatBountyProgress = (bounty: ActiveBounty) => {
+    if (bounty.milestone_type === "revenue") {
+      return `${formatCurrency(bounty.currentValue)} of ${formatCurrency(bounty.milestone_value)} revenue`;
+    }
+    return `${formatNumber(bounty.currentValue)} of ${formatNumber(bounty.milestone_value)} ${bounty.milestone_type}`;
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "approved":
@@ -451,22 +384,9 @@ export default function CreatorHome() {
 
   return (
     <CreatorLayout>
-      
-      <MilestoneCelebration
-        show={showMilestoneCelebration}
-        onComplete={() => setShowMilestoneCelebration(false)}
-        title="$500 Guarantee Unlocked!"
-        subtitle="You've hit 35 approved videos this month!"
-      />
-
       <div className="space-y-6 animate-fade-in">
         <CreatorOnboarding />
         <StripeConnectionBanner />
-        <EligibilityStatusBanner />
-        <PayoutRulesCard />
-
-        {/* Consistency Tracker - Hero Card */}
-        <ConsistencyTracker />
 
         {/* Hero Section with Welcome & Quick Actions - Compact on mobile */}
         <div className="relative overflow-hidden rounded-xl md:rounded-2xl bg-gradient-to-br from-primary/8 via-primary/4 to-transparent border border-border/50 dark:border-white/[0.06] p-4 md:p-6 backdrop-blur-sm">
@@ -474,22 +394,18 @@ export default function CreatorHome() {
           
           <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 md:gap-4">
             <div className="flex-1">
-              <div className="flex items-center gap-2 md:gap-3 mb-1 md:mb-2">
-                <h1 className="text-xl md:text-3xl font-semibold">
-                  Hey, {creatorName}! 👋
-                </h1>
-                {progress.currentStreak > 0 && (
-                  <StreakIndicator 
-                    currentStreak={progress.currentStreak} 
-                    longestStreak={progress.longestStreak}
-                    size="sm"
-                    showLabel={false}
-                  />
-                )}
+              <h1 className="text-xl md:text-3xl font-semibold mb-1 md:mb-2">
+                Hey, {creatorName}! 👋
+              </h1>
+              <div className="space-y-0.5 text-sm md:text-base text-muted-foreground">
+                <p>${PER_VIDEO_RATE} per approved video, credited when it is approved.</p>
+                <p>
+                  Upload day:{" "}
+                  <span className="font-medium text-foreground">
+                    {weekdayLabel(settings.upload_schedule.weekday)}
+                  </span>
+                </p>
               </div>
-              <p className="text-sm md:text-base text-muted-foreground">
-                You earn <span className="text-primary font-semibold">{stats.commissionRate}%</span> commission on sales
-              </p>
             </div>
             
             {/* Hide analytics button on mobile - bottom nav has it */}
@@ -561,68 +477,6 @@ export default function CreatorHome() {
           </Card>
         </div>
 
-        {/* Progress & Challenges Row */}
-        <div className="grid lg:grid-cols-2 gap-6">
-          {/* XP & Level Progress */}
-          <CreatorProgressCard />
-          
-          {/* Consistency Leaderboard */}
-          <ConsistencyLeaderboard />
-
-          {/* Monthly Guarantee Progress */}
-          <Card className="border-2 border-dashed border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
-            <CardHeader className="pb-2 md:pb-3 p-3 md:p-6">
-              <CardTitle className="text-base md:text-lg flex items-center gap-2">
-                <Trophy className="w-4 h-4 md:w-5 md:h-5 text-primary" />
-                Monthly $500 Guarantee
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 md:space-y-4 p-3 md:p-6 pt-0">
-              <div>
-                <div className="flex items-center justify-between mb-1.5 md:mb-2">
-                  <span className="text-xs md:text-sm text-muted-foreground">Progress</span>
-                  <span className="text-xs md:text-sm font-medium">
-                    <span className={stats.approvedThisMonth >= 35 ? "text-primary" : ""}>
-                      {stats.approvedThisMonth}
-                    </span>
-                    <span className="text-muted-foreground">/35</span>
-                  </span>
-                </div>
-                <Progress 
-                  value={Math.min((stats.approvedThisMonth / 35) * 100, 100)} 
-                  className="h-2 md:h-3"
-                />
-              </div>
-              
-              <p className="text-xs md:text-sm text-muted-foreground">
-                {stats.approvedThisMonth >= 35 ? (
-                  <span className="text-primary font-medium flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 md:w-4 md:h-4" />
-                    Unlocked! 🎉
-                  </span>
-                ) : (
-                  <>
-                    <strong>{35 - stats.approvedThisMonth}</strong> more to unlock
-                  </>
-                )}
-              </p>
-
-              {/* Hide button on mobile */}
-              {stats.approvedThisMonth < 35 && (
-                <Button asChild size="sm" className="hidden md:flex w-full">
-                  <Link to="/creator/submit">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Submit Video
-                  </Link>
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Weekly Challenges */}
-        <WeeklyChallengesCard />
-
         {/* Pending Videos Alert */}
         {stats.pendingVideos > 0 && (
           <Card className="border-warning/20 bg-warning/5">
@@ -639,6 +493,48 @@ export default function CreatorHome() {
               <Button variant="outline" size="sm" asChild>
                 <Link to="/creator/videos">View Videos</Link>
               </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Active Bounties */}
+        {activeBounties.length > 0 && (
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between p-3 md:p-6 pb-2 md:pb-4">
+              <CardTitle className="text-base md:text-lg font-semibold flex items-center gap-2">
+                <Trophy className="w-4 h-4 md:w-5 md:h-5 text-warning" />
+                Active Bounties
+              </CardTitle>
+              <Button variant="ghost" size="sm" className="h-7 text-xs md:text-sm" asChild>
+                <Link to="/creator/bounties" className="gap-1">
+                  View all
+                  <ArrowRight className="w-3 h-3 md:w-4 md:h-4" />
+                </Link>
+              </Button>
+            </CardHeader>
+            <CardContent className="grid gap-2 md:gap-3 md:grid-cols-3 p-3 md:p-6 pt-0">
+              {activeBounties.map((bounty) => {
+                const pct = bounty.milestone_value > 0
+                  ? Math.min((bounty.currentValue / bounty.milestone_value) * 100, 100)
+                  : 0;
+                return (
+                  <div key={bounty.id} className="rounded-lg bg-secondary/30 p-3 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-medium leading-tight">{bounty.title}</p>
+                      <span className="text-sm font-semibold text-primary shrink-0">
+                        {formatCurrency(bounty.reward_amount)}
+                      </span>
+                    </div>
+                    <Progress value={pct} className="h-1.5" />
+                    <p className="text-[10px] md:text-xs text-muted-foreground">
+                      {formatBountyProgress(bounty)}
+                      {bounty.end_date && (
+                        <> · Ends {new Date(bounty.end_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</>
+                      )}
+                    </p>
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
         )}
@@ -748,7 +644,7 @@ export default function CreatorHome() {
                   <Button size="sm" variant="outline" className="w-full gap-2" asChild>
                     <Link to="/creator/submit">
                       <Plus className="w-4 h-4" />
-                      Keep the streak — submit another video
+                      Submit another video
                     </Link>
                   </Button>
                 </div>

@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -39,7 +38,6 @@ import { useToast } from "@/hooks/use-toast";
 type TimeRange = "7d" | "30d" | "all";
 type SortBy = "revenue" | "orders" | "recent";
 
-const GUARANTEE_THRESHOLD = 35;
 
 interface CreatorData {
   id: string;
@@ -223,7 +221,7 @@ export default function MenteeProfile() {
     rejected: videos.filter((v) => v.status === "rejected").length,
   }), [videos]);
 
-  // Guarantee progress (approved non-bounty this month)
+  // Approved non-bounty videos this month
   const approvedThisMonth = useMemo(() => {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -287,8 +285,6 @@ export default function MenteeProfile() {
     );
   }
 
-  const progressPct = Math.min((approvedThisMonth / GUARANTEE_THRESHOLD) * 100, 100);
-
   return (
     <CreatorLayout>
       <div className="space-y-6">
@@ -329,14 +325,13 @@ export default function MenteeProfile() {
           </div>
         </div>
 
-        {/* Guarantee Progress */}
+        {/* Approved this month */}
         <Card>
           <CardContent className="pt-5 pb-4">
-            <div className="flex items-center justify-between text-sm mb-2">
-              <span className="text-muted-foreground font-medium">Monthly Guarantee Progress</span>
-              <span className="font-semibold">{approvedThisMonth}/{GUARANTEE_THRESHOLD} approved</span>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground font-medium">Approved this month</span>
+              <span className="font-semibold">{approvedThisMonth} video{approvedThisMonth === 1 ? "" : "s"}</span>
             </div>
-            <Progress value={progressPct} className="h-3" />
           </CardContent>
         </Card>
 

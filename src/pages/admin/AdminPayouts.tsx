@@ -528,7 +528,6 @@ export default function AdminPayouts() {
     const typeLabels: Record<string, string> = {
       commission: "Commission",
       bounty: "Bounty",
-      challenge: "Challenge",
       guarantee: "Guarantee",
     };
     return (
@@ -684,29 +683,11 @@ export default function AdminPayouts() {
           <CardContent className="p-4">
             <div className="space-y-3">
               <div className="flex items-start gap-3">
-                <Zap className="w-5 h-5 text-success mt-0.5 shrink-0" />
-                <div className="text-sm">
-                  <p className="font-medium text-success">Monthly Commissions</p>
-                  <p className="text-muted-foreground">
-                    Paid on the 1st of each month. <strong>Eligibility requires</strong> hitting Tue/Thu/Sat upload days with 4+ approved videos. Miss more than 3 days → commission forfeited (no rollover).
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
                 <Clock className="w-5 h-5 text-warning mt-0.5 shrink-0" />
                 <div className="text-sm">
                   <p className="font-medium text-warning">Requires Approval</p>
                   <p className="text-muted-foreground">
-                    <strong>Bounties & Challenges</strong> — Created as pending when qualified. Use "Process All Pending" to pay.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Award className="w-5 h-5 text-primary mt-0.5 shrink-0" />
-                <div className="text-sm">
-                  <p className="font-medium">Monthly Guarantees</p>
-                  <p className="text-muted-foreground">
-                    <strong>$500 guaranteed</strong> for 35+ approved videos/month. Calculated on the 1st, then bulk processed.
+                    <strong>Bounties</strong> are created as pending when a creator qualifies. Use "Process All Pending" to pay.
                   </p>
                 </div>
               </div>
@@ -1022,7 +1003,6 @@ export default function AdminPayouts() {
                   <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="commission">Commission</SelectItem>
                   <SelectItem value="bounty">Bounty</SelectItem>
-                  <SelectItem value="challenge">Challenge</SelectItem>
                   <SelectItem value="guarantee">Guarantee</SelectItem>
                 </SelectContent>
               </Select>

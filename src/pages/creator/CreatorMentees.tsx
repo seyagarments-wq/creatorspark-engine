@@ -3,7 +3,6 @@ import { useAuth } from "@/lib/auth";
 import { supabase } from "@/integrations/supabase/client";
 import CreatorLayout from "@/components/layout/CreatorLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { MessageSquare, TrendingUp, DollarSign, ShoppingCart, CheckCircle, XCircle, Clock, Users, Eye, MousePointerClick, Percent } from "lucide-react";
@@ -29,8 +28,6 @@ interface MenteeData {
   totalClicks: number;
   totalSpend: number;
 }
-
-const GUARANTEE_THRESHOLD = 35;
 
 export default function CreatorMentees() {
   const { profileId } = useAuth();
@@ -76,7 +73,7 @@ export default function CreatorMentees() {
 
       // Fetch performance data for these creators' videos
       const videoIds = (videos || []).map((v) => v.id);
-      let perfData: any[] = [];
+      const perfData: any[] = [];
       if (videoIds.length > 0) {
         // Batch in chunks of 100
         for (let i = 0; i < videoIds.length; i += 100) {
@@ -211,7 +208,6 @@ export default function CreatorMentees() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
             {mentees.map((m) => {
-              const progressPct = Math.min((m.approvedThisMonth / GUARANTEE_THRESHOLD) * 100, 100);
               return (
                 <Card key={m.id} className="overflow-hidden cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate(`/creator/mentees/${m.id}`)}>
                   <CardHeader className="pb-3">
@@ -234,15 +230,10 @@ export default function CreatorMentees() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    {/* Guarantee progress */}
-                    <div>
-                      <div className="flex items-center justify-between text-sm mb-1.5">
-                        <span className="text-muted-foreground">Monthly guarantee</span>
-                        <span className="font-medium">
-                          {m.approvedThisMonth}/{GUARANTEE_THRESHOLD}
-                        </span>
-                      </div>
-                      <Progress value={progressPct} className="h-2.5" />
+                    {/* Approved this month */}
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Approved this month</span>
+                      <span className="font-medium">{m.approvedThisMonth}</span>
                     </div>
 
                     {/* Stats grid */}

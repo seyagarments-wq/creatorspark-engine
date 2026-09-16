@@ -71,7 +71,7 @@ function getCreatorEmailHtml(name: string, mentorName: string): string {
     ${p(`<strong>Lock in your script.</strong><br/>Draft it, get ${mentorName}'s notes, fix the hook. THEN hit record.`)}
     ${p(`No more guessing.<br/>No more wasted takes.<br/>No more "can you re-film this."`)
     }
-    ${p(`This is how you level up.`)}
+    ${p(`This is how your videos get better.`)}
     <div style="text-align:center;margin:28px 0 12px 0;">
       <a href="https://creatorsctrl.com/creator/plan" style="display:inline-block;background-color:#8B5CF6;color:white;padding:14px 28px;text-decoration:none;border-radius:8px;font-weight:600;font-size:16px;">Open Your Planning Hub</a>
     </div>

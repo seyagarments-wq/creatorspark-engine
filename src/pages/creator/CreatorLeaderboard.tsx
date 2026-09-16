@@ -6,11 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Progress } from "@/components/ui/progress";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
-import { Trophy, DollarSign, Video, Medal, Crown, Award, Star, Target, Flame, Eye, ShoppingCart, TrendingUp, ChevronRight, Users } from "lucide-react";
-import { AchievementBadge, getEarnedAchievements, type AchievementType } from "@/components/gamification/AchievementBadge";
+import { Trophy, DollarSign, Video, Medal, Crown, Award, ChevronRight } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getAvatarUrl } from "@/lib/storage";
 import { playSoundEffect } from "@/hooks/use-sound-effects";
@@ -24,16 +22,12 @@ interface LeaderboardEntry {
   avatar_url: string | null;
   rank: number;
   metric_value: number;
-  tier: string;
   approvedVideos: number;
   totalSales: number;
-  currentStreak: number;
   totalEarnings: number;
-  referralCount: number;
-  referralBonus: number;
 }
 
-type MetricType = "revenue" | "streak" | "videos" | "referrals";
+type MetricType = "revenue" | "videos";
 
 interface CreatorBestVideo {
   id: string;
@@ -54,16 +48,9 @@ interface SelectedCreator {
 export default function CreatorLeaderboard() {
   const { profileId } = useAuth();
   const isMobile = useIsMobile();
-  const [activeTab, setActiveTab] = useState<MetricType>("revenue");
+  const [activeTab, setActiveTab] = useState<MetricType>("videos");
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [myStats, setMyStats] = useState<{
-    rank: number;
-    achievements: AchievementType[];
-    approvedVideos: number;
-    totalSales: number;
-    currentStreak: number;
-    totalEarnings: number;
-  } | null>(null);
+  const [myStats, setMyStats] = useState<{ rank: number; approvedVideos: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedCreator, setSelectedCreator] = useState<SelectedCreator | null>(null);
   const [previewVideo, setPreviewVideo] = useState<CreatorBestVideo | null>(null);
@@ -92,13 +79,9 @@ export default function CreatorLeaderboard() {
         avatar_url: e.avatar_url ? getAvatarUrl(e.avatar_url) : null,
         rank: e.rank ?? 0,
         metric_value: e.metric_value ?? 0,
-        tier: e.tier ?? "Bronze",
         approvedVideos: e.approvedVideos ?? 0,
         totalSales: e.totalSales ?? 0,
-        currentStreak: e.currentStreak ?? 0,
         totalEarnings: e.totalEarnings ?? 0,
-        referralCount: e.referralCount ?? 0,
-        referralBonus: e.referralBonus ?? 0,
       }));
 
       setLeaderboard(normalized);
@@ -113,14 +96,6 @@ export default function CreatorLeaderboard() {
         setMyStats(null);
         return;
       }
-
-      const achievements = getEarnedAchievements({
-        approvedVideos: me.approvedVideos,
-        totalSales: me.totalSales,
-        roas: 0,
-        totalEarnings: me.totalEarnings,
-        rank: me.rank > 0 ? me.rank : undefined,
-      });
 
       // 🏆 Top-3 celebration — once per session per tab
       if (me.rank > 0 && me.rank <= 3 && !top3Celebrated.current) {
@@ -139,14 +114,7 @@ export default function CreatorLeaderboard() {
         } catch {/* ignore */}
       }
 
-      setMyStats({
-        rank: me.rank,
-        achievements,
-        approvedVideos: me.approvedVideos,
-        totalSales: me.totalSales,
-        currentStreak: me.currentStreak,
-        totalEarnings: me.totalEarnings,
-      });
+      setMyStats({ rank: me.rank, approvedVideos: me.approvedVideos });
     } catch (error) {
       console.error("Error fetching leaderboard:", error);
     } finally {
@@ -154,10 +122,7 @@ export default function CreatorLeaderboard() {
     }
   }
 
-  const isClickableTab = activeTab === "revenue" || activeTab === "videos";
-
   async function handleCreatorClick(entry: LeaderboardEntry) {
-    if (!isClickableTab) return;
     if (entry.rank === 0 && entry.approvedVideos === 0) return;
 
     setSelectedCreator({ entry, topVideos: [], loadingVideo: true });
@@ -199,10 +164,6 @@ export default function CreatorLeaderboard() {
           currency: "USD",
           minimumFractionDigits: 0,
         }).format(value);
-      case "streak":
-        return `${value} days`;
-      case "referrals":
-        return `${value} invite${value !== 1 ? "s" : ""}`;
       case "videos":
         return value.toString();
     }
@@ -236,16 +197,6 @@ export default function CreatorLeaderboard() {
     }
   }
 
-  function getTierBadge(tier: string) {
-    const classes: Record<string, string> = {
-      Platinum: "tier-platinum",
-      Gold: "tier-gold",
-      Silver: "tier-silver",
-      Bronze: "tier-bronze",
-    };
-    return <Badge className={`${classes[tier]} text-xs`}>{tier}</Badge>;
-  }
-
   return (
     <CreatorLayout>
       <div className="space-y-4 md:space-y-6 animate-fade-in">
@@ -262,43 +213,25 @@ export default function CreatorLeaderboard() {
           </div>
         </div>
 
-        {/* My Stats & Achievements Card - compact on mobile */}
+        {/* My standing - compact on mobile */}
         {myStats && (
           <Card className="bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 border-primary/20">
             <CardContent className="p-3 md:p-6">
-              <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2 md:mb-3">
-                    <Star className="w-4 h-4 md:w-5 md:h-5 text-primary" />
-                    <h3 className="font-semibold text-sm md:text-base">Your Achievements</h3>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 md:gap-2 mb-3 md:mb-4">
-                    {myStats.achievements.length > 0 ? (
-                      myStats.achievements.slice(0, isMobile ? 6 : 8).map((achievement) => (
-                        <AchievementBadge key={achievement} type={achievement} size={isMobile ? "sm" : "md"} />
-                      ))
-                    ) : (
-                      <p className="text-xs md:text-sm text-muted-foreground">
-                        Submit videos to earn achievements!
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 md:gap-4 text-xs md:text-sm">
-                    <div className="flex items-center gap-1">
-                      <Target className="w-3.5 h-3.5 md:w-4 md:h-4 text-muted-foreground" />
-                      <span>{myStats.achievements.length} / 14</span>
-                    </div>
-                    <Progress value={(myStats.achievements.length / 14) * 100} className="w-24 md:w-32 h-1.5 md:h-2" />
-                  </div>
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-sm md:text-base">Your standing</h3>
+                  <p className="text-xs md:text-sm text-muted-foreground">
+                    {activeTab === "revenue" ? "Ranked by revenue" : "Ranked by approved videos"}
+                  </p>
                 </div>
-                <div className="grid grid-cols-2 gap-2 md:gap-4 md:w-auto">
-                  <div className="text-center p-2 md:p-3 bg-background/50 rounded-lg">
+                <div className="grid grid-cols-2 gap-2 md:gap-4 shrink-0">
+                  <div className="text-center p-2 md:p-3 bg-background/50 rounded-lg min-w-[72px]">
                     <p className="text-lg md:text-2xl font-bold">
                       {myStats.rank > 0 ? `#${myStats.rank}` : "-"}
                     </p>
                     <p className="text-[10px] md:text-xs text-muted-foreground">Your Rank</p>
                   </div>
-                  <div className="text-center p-2 md:p-3 bg-background/50 rounded-lg">
+                  <div className="text-center p-2 md:p-3 bg-background/50 rounded-lg min-w-[72px]">
                     <p className="text-lg md:text-2xl font-bold">{myStats.approvedVideos}</p>
                     <p className="text-[10px] md:text-xs text-muted-foreground">Videos</p>
                   </div>
@@ -310,22 +243,14 @@ export default function CreatorLeaderboard() {
 
         {/* Tabs - smaller on mobile */}
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as MetricType)}>
-          <TabsList className="grid w-full grid-cols-4 max-w-lg h-9 md:h-10">
-            <TabsTrigger value="revenue" className="gap-1 md:gap-2 text-xs md:text-sm px-2">
-              <DollarSign className="w-3.5 h-3.5 md:w-4 md:h-4" />
-              <span>Revenue</span>
-            </TabsTrigger>
-            <TabsTrigger value="streak" className="gap-1 md:gap-2 text-xs md:text-sm px-2">
-              <Flame className="w-3.5 h-3.5 md:w-4 md:h-4" />
-              Streak
-            </TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 max-w-xs h-9 md:h-10">
             <TabsTrigger value="videos" className="gap-1 md:gap-2 text-xs md:text-sm px-2">
               <Video className="w-3.5 h-3.5 md:w-4 md:h-4" />
               Videos
             </TabsTrigger>
-            <TabsTrigger value="referrals" className="gap-1 md:gap-2 text-xs md:text-sm px-2">
-              <Users className="w-3.5 h-3.5 md:w-4 md:h-4" />
-              Referrals
+            <TabsTrigger value="revenue" className="gap-1 md:gap-2 text-xs md:text-sm px-2">
+              <DollarSign className="w-3.5 h-3.5 md:w-4 md:h-4" />
+              <span>Revenue</span>
             </TabsTrigger>
           </TabsList>
 
@@ -333,13 +258,7 @@ export default function CreatorLeaderboard() {
             <Card>
               <CardHeader className="p-3 md:p-6 pb-2 md:pb-4">
               <CardTitle className="text-sm md:text-lg">
-                {activeTab === "revenue"
-                  ? "Top Creators by Revenue"
-                  : activeTab === "streak"
-                  ? "Top Creators by Streak"
-                   : activeTab === "referrals"
-                   ? "Top Creators by Invites"
-                  : "Top Creators by Videos"}
+                {activeTab === "revenue" ? "Top Creators by Revenue" : "Top Creators by Videos"}
               </CardTitle>
               </CardHeader>
               <CardContent className="p-2 md:p-6 pt-0 md:pt-0">
@@ -362,9 +281,9 @@ export default function CreatorLeaderboard() {
                     {leaderboard.map((entry) => (
                       <div
                         key={entry.id}
-                        onClick={() => isClickableTab ? handleCreatorClick(entry) : undefined}
+                        onClick={() => handleCreatorClick(entry)}
                         className={`flex items-center gap-2 md:gap-4 p-2 md:p-4 rounded-lg md:rounded-xl transition-colors ${
-                          isClickableTab && (entry.rank > 0 || entry.approvedVideos > 0) ? "cursor-pointer" : "cursor-default"
+                          entry.rank > 0 || entry.approvedVideos > 0 ? "cursor-pointer" : "cursor-default"
                         } group ${
                           entry.rank > 0 && entry.rank <= 3
                             ? "bg-gradient-to-r from-primary/5 to-transparent border border-primary/10 hover:border-primary/30"
@@ -397,19 +316,6 @@ export default function CreatorLeaderboard() {
                             )}
                           </div>
                           <div className="flex items-center gap-1.5 md:gap-2 mt-0.5 md:mt-1">
-                            {getTierBadge(entry.tier)}
-                            <div className="hidden md:flex gap-1">
-                              {getEarnedAchievements({
-                                approvedVideos: entry.approvedVideos,
-                                totalSales: entry.totalSales,
-                                roas: 0,
-                                totalEarnings: entry.totalEarnings,
-                              })
-                                .slice(0, 3)
-                                .map((achievement) => (
-                                  <AchievementBadge key={achievement} type={achievement} size="sm" />
-                                ))}
-                            </div>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
@@ -418,7 +324,7 @@ export default function CreatorLeaderboard() {
                               {entry.rank === 0 ? "—" : formatMetricValue(entry.metric_value, activeTab)}
                             </p>
                           </div>
-                          {isClickableTab && entry.approvedVideos > 0 && (
+                          {entry.approvedVideos > 0 && (
                             <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                           )}
                         </div>
@@ -450,7 +356,6 @@ export default function CreatorLeaderboard() {
                   <div>
                     <SheetTitle className="text-base">{selectedCreator.entry.full_name}</SheetTitle>
                     <div className="flex items-center gap-2 mt-0.5">
-                      {getTierBadge(selectedCreator.entry.tier)}
                       <span className="text-xs text-muted-foreground">
                         {selectedCreator.entry.approvedVideos} approved video{selectedCreator.entry.approvedVideos !== 1 ? "s" : ""}
                       </span>

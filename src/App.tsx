@@ -48,7 +48,6 @@ const CreatorMentees = lazy(() => import("./pages/creator/CreatorMentees"));
 const MenteeProfile = lazy(() => import("./pages/creator/MenteeProfile"));
 const MentorPlanHub = lazy(() => import("./pages/creator/MentorPlanHub"));
 const MentorPlanningLanding = lazy(() => import("./pages/creator/MentorPlanningLanding"));
-const CreatorRewardShop = lazy(() => import("./pages/creator/CreatorRewardShop"));
 const CreatorPhotoSubmit = lazy(() => import("./pages/creator/CreatorPhotoSubmit"));
 const CreatorCalendar = lazy(() => import("./pages/creator/CreatorCalendar"));
 const CreatorAI = lazy(() => import("./pages/creator/CreatorAI"));
@@ -56,7 +55,6 @@ const CreatorAI = lazy(() => import("./pages/creator/CreatorAI"));
 // Admin pages
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AdminAI = lazy(() => import("./pages/admin/AdminAI"));
-const AdminVideos = lazy(() => import("./pages/admin/AdminVideos"));
 const AdminCreators = lazy(() => import("./pages/admin/AdminCreators"));
 const AdminSubmissions = lazy(() => import("./pages/admin/AdminSubmissions"));
 const AdminRewards = lazy(() => import("./pages/admin/AdminRewards"));
@@ -73,8 +71,6 @@ const AdminBrand = lazy(() => import("./pages/admin/AdminBrand"));
 const AdminContentReview = lazy(() => import("./pages/admin/AdminContentReview"));
 const AdminVideoRankings = lazy(() => import("./pages/admin/AdminVideoRankings"));
 const AdminAgreements = lazy(() => import("./pages/admin/AdminAgreements"));
-const AdminEligibility = lazy(() => import("./pages/admin/AdminEligibility"));
-const AdminCohortSchedule = lazy(() => import("./pages/admin/AdminCohortSchedule"));
 
 // Ads pages
 const AdsActive = lazy(() => import("./pages/ads/AdsActive"));
@@ -185,7 +181,6 @@ function AppRoutes() {
         <Route path="/creator/mentees/:id/plan" element={<ProtectedRoute requiredRole="creator"><MentorPlanHub /></ProtectedRoute>} />
         <Route path="/creator/plan" element={<ProtectedRoute requiredRole="creator"><MentorPlanHub /></ProtectedRoute>} />
         <Route path="/creator/planning" element={<ProtectedRoute requiredRole="creator"><MentorPlanningLanding /></ProtectedRoute>} />
-        <Route path="/creator/rewards" element={<ProtectedRoute requiredRole="creator"><CreatorRewardShop /></ProtectedRoute>} />
         <Route path="/creator/photo-submissions" element={<ProtectedRoute requiredRole="creator"><CreatorPhotoSubmit /></ProtectedRoute>} />
         <Route path="/creator/photos/submit" element={<ProtectedRoute requiredRole="creator"><CreatorPhotoSubmit /></ProtectedRoute>} />
         <Route path="/creator/calendar" element={<ProtectedRoute requiredRole="creator"><CreatorCalendar /></ProtectedRoute>} />
@@ -213,8 +208,6 @@ function AppRoutes() {
         <Route path="/admin/video-rankings" element={<ProtectedRoute requiredRole="admin"><AdminVideoRankings /></ProtectedRoute>} />
         <Route path="/admin/agreements" element={<ProtectedRoute requiredRole="admin"><AdminAgreements /></ProtectedRoute>} />
         <Route path="/admin/ai" element={<ProtectedRoute requiredRole="admin"><AdminAI /></ProtectedRoute>} />
-        <Route path="/admin/eligibility" element={<ProtectedRoute requiredRole="admin"><AdminEligibility /></ProtectedRoute>} />
-        <Route path="/admin/cohorts/:id/schedule" element={<ProtectedRoute requiredRole="admin"><AdminCohortSchedule /></ProtectedRoute>} />
 
         {/* Ads routes (admin only) */}
         <Route path="/ads" element={<ProtectedRoute requiredRole="admin"><AdsActive /></ProtectedRoute>} />

@@ -1,102 +1,92 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import CreatorLayout from "@/components/layout/CreatorLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/lib/auth";
-import { Check, X, Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useSettings } from "@/hooks/use-settings";
+import { weekdayIndex, weekdayLabel } from "@/lib/upload-day";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type DailyStatus = {
-  date: string;
-  approved_count: number;
-  required_count: number;
-  is_required_day: boolean;
-  status: "pending" | "met" | "missed" | "excused";
-};
+const WEEKDAY_HEADERS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default function CreatorCalendar() {
-  const { profileId } = useAuth();
-  const [statuses, setStatuses] = useState<DailyStatus[]>([]);
-  const [eligibility, setEligibility] = useState<any | null>(null);
-  const [monthDate] = useState(new Date());
+  const { settings } = useSettings();
+  const uploadDay = settings.upload_schedule.weekday;
+  const uploadDayIndex = weekdayIndex(uploadDay);
 
-  useEffect(() => {
-    if (!profileId) return;
-    void load();
-  }, [profileId]);
+  const today = new Date();
+  const [monthDate, setMonthDate] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
 
-  async function load() {
-    const monthStart = new Date(Date.UTC(monthDate.getUTCFullYear(), monthDate.getUTCMonth(), 1)).toISOString().slice(0, 10);
-    const monthEnd = new Date(Date.UTC(monthDate.getUTCFullYear(), monthDate.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
-
-    const [{ data: days }, { data: elig }] = await Promise.all([
-      supabase.from("creator_daily_upload_status").select("*").eq("creator_id", profileId!).gte("date", monthStart).lte("date", monthEnd).order("date"),
-      supabase.from("creator_monthly_eligibility").select("*").eq("creator_id", profileId!).eq("month", monthStart).maybeSingle(),
-    ]);
-    setStatuses((days ?? []) as DailyStatus[]);
-    setEligibility(elig);
-  }
-
-  const year = monthDate.getUTCFullYear();
-  const month = monthDate.getUTCMonth();
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayWeekday = new Date(Date.UTC(year, month, 1)).getUTCDay();
-  const today = new Date().toISOString().slice(0, 10);
+  const firstDayWeekday = new Date(year, month, 1).getDay();
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
 
-  const banner = (() => {
-    if (!eligibility) return { tone: "muted", text: "Tracking your month — no data yet." };
-    const { met_days, required_days, missed_days, status } = eligibility;
-    if (status === "ineligible") return { tone: "destructive", text: `Locked out — ${missed_days} missed days. No commission this month.` };
-    if (status === "at_risk") return { tone: "warning", text: `At risk — ${missed_days} missed. One more disqualifies this month.` };
-    return { tone: "ok", text: `On track — ${met_days}/${required_days} days, ${missed_days} missed.` };
-  })();
+  const shiftMonth = (delta: number) => setMonthDate(new Date(year, month + delta, 1));
 
   return (
     <CreatorLayout>
-      <div className="container max-w-4xl py-6 space-y-6">
-        <h1 className="text-2xl font-bold">Upload Calendar</h1>
-        <p className="text-sm text-muted-foreground">
-          Required days: <strong>Tue / Thu / Sat</strong> · <strong>4 approved minimum</strong> (5 = full credit) · Miss more than 3 days = no commission this month. <span className="text-destructive font-medium">No rollover.</span>
-        </p>
-
-        <div className={cn(
-          "rounded-lg p-4 border",
-          banner.tone === "destructive" && "bg-destructive/10 border-destructive text-destructive",
-          banner.tone === "warning" && "bg-accent border-accent text-accent-foreground",
-          banner.tone === "ok" && "bg-primary/10 border-primary",
-        )}>
-          <p className="font-medium">{banner.text}</p>
+      <div className="max-w-4xl mx-auto space-y-4 md:space-y-6 animate-fade-in">
+        <div>
+          <h1 className="text-xl md:text-2xl font-bold">Upload Calendar</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Upload day is {weekdayLabel(uploadDay)}. Batch your videos and upload them that day.
+          </p>
         </div>
 
         <Card>
-          <CardHeader><CardTitle>{monthDate.toLocaleString("default", { month: "long", year: "numeric" })}</CardTitle></CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-7 gap-2 text-center text-xs text-muted-foreground mb-2">
-              {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((d) => <div key={d}>{d}</div>)}
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-3 md:p-6 pb-2 md:pb-4">
+            <CardTitle className="text-base md:text-lg">
+              {monthDate.toLocaleString("default", { month: "long", year: "numeric" })}
+            </CardTitle>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => shiftMonth(-1)}
+                aria-label="Previous month"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => shiftMonth(1)}
+                aria-label="Next month"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
             </div>
-            <div className="grid grid-cols-7 gap-2">
-              {Array.from({ length: firstDayWeekday }).map((_, i) => <div key={`pad-${i}`} />)}
+          </CardHeader>
+          <CardContent className="p-3 md:p-6 pt-0 md:pt-0">
+            <div className="grid grid-cols-7 gap-1.5 md:gap-2 text-center text-xs text-muted-foreground mb-2">
+              {WEEKDAY_HEADERS.map((label, i) => (
+                <div key={label} className={cn(i === uploadDayIndex && "text-primary font-medium")}>
+                  {label}
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-7 gap-1.5 md:gap-2">
+              {Array.from({ length: firstDayWeekday }).map((_, i) => (
+                <div key={`pad-${i}`} />
+              ))}
               {Array.from({ length: daysInMonth }).map((_, i) => {
                 const dayNum = i + 1;
-                const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-                const ds = statuses.find((s) => s.date === dateStr);
-                const isToday = dateStr === today;
+                const isUploadDay = (firstDayWeekday + i) % 7 === uploadDayIndex;
+                const isToday = isCurrentMonth && today.getDate() === dayNum;
                 return (
-                  <div key={dayNum} className={cn(
-                    "aspect-square rounded-md border p-2 flex flex-col items-center justify-between text-xs",
-                    isToday && "border-primary border-2",
-                    ds?.status === "met" && "bg-primary/10",
-                    ds?.status === "missed" && "bg-destructive/10",
-                    ds?.is_required_day && !ds?.status && "bg-muted",
-                  )}>
-                    <span className="font-medium">{dayNum}</span>
-                    {ds?.status === "met" && <Check className="w-4 h-4 text-primary" />}
-                    {ds?.status === "missed" && <X className="w-4 h-4 text-destructive" />}
-                    {ds?.is_required_day && ds?.status === "pending" && <Clock className="w-4 h-4 text-muted-foreground" />}
-                    {ds && ds.is_required_day && (
-                      <Badge variant="outline" className="text-[9px] px-1 py-0">{ds.approved_count}/{ds.required_count}</Badge>
+                  <div
+                    key={dayNum}
+                    className={cn(
+                      "aspect-square rounded-md border flex items-center justify-center text-xs md:text-sm",
+                      isUploadDay && "bg-primary/10 text-primary font-medium ring-1 ring-primary/30 border-transparent",
+                      isToday && "border-2 border-primary"
                     )}
+                  >
+                    {dayNum}
                   </div>
                 );
               })}
