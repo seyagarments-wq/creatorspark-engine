@@ -38,6 +38,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { uploadResumable, describeUploadFailure } from "@/lib/resumable-upload";
 import { checkVideoFile, fileExtension, formatBytes, MAX_VIDEO_LABEL } from "@/lib/upload-limits";
 import { beginUpload } from "@/lib/upload-guard";
+import { takePickedFiles } from "@/lib/file-picker";
 
 const fireConfetti = () => {
   const count = 200;
@@ -398,17 +399,19 @@ export default function CreatorSubmit() {
   }
 
   async function handleFilesSelected(files: FileList | null) {
-    // Let the same file be picked again after a remove/retry.
+    // Copy the files out BEFORE resetting the input: `e.target.files` is the
+    // input's live list and the reset empties it in place. Resetting lets the
+    // same file be picked again after a remove/retry.
     const input = document.getElementById("video-input") as HTMLInputElement | null;
-    if (input) input.value = "";
+    const picked = takePickedFiles(files, input);
 
-    if (!files || files.length === 0) return;
+    if (picked.length === 0) return;
 
     // Pre-flight: size and type are checked the moment the file is picked, so a
     // 1.4 GB clip is refused here with the limit named, not 30 seconds into an upload.
     const accepted: { file: File; contentType: string }[] = [];
     const rejected: RejectedFile[] = [];
-    for (const file of Array.from(files)) {
+    for (const file of picked) {
       const check = checkVideoFile(file);
       if (check.ok === false) {
         rejected.push({ name: file.name, reason: check.reason });
