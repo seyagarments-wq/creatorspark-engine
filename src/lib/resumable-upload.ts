@@ -70,7 +70,9 @@ export function classifyUploadError(err: tus.DetailedError | Error): ResumableUp
   if (status === 415 || (status === 400 && /mime|content.?type/i.test(body))) {
     return new ResumableUploadError("unsupported_type", "This file type is not accepted. Use MP4 or MOV.", status);
   }
-  if (status === 401 || status === 403) {
+  if (status === 401 || status === 403 || /invalid compact jws|invalid jwt|accessdenied|unauthorized/i.test(body)) {
+    // Supabase storage answers a malformed or rejected token with a 400 whose
+    // body says "Invalid Compact JWS" / "AccessDenied", not a 401.
     return new ResumableUploadError("unauthorized", "Your session expired. Sign in again and retry.", status);
   }
   if (status === 409) {
@@ -107,8 +109,30 @@ async function currentAccessToken(): Promise<string> {
  * Upload one file. Resolves with the object path (`bucket/objectName`) on
  * success. Resumes a previous attempt of the same file automatically.
  */
+/**
+ * Static headers for every TUS request. `authorization` is deliberately NOT
+ * here: it is set once per request in `onBeforeRequest` so the token is always
+ * fresh. Listing it in both places made tus-js-client call setRequestHeader
+ * twice for the same name, the browser joined the values into
+ * `Bearer X, Bearer X`, and storage rejected every upload with 400
+ * "Invalid Compact JWS" (production, 2026-09-16).
+ */
+export function staticUploadHeaders(upsert: boolean | undefined, anonKey: string = SUPABASE_ANON_KEY): Record<string, string> {
+  return {
+    apikey: anonKey,
+    "x-upsert": upsert ? "true" : "false",
+  };
+}
+
+/** Sets the bearer token on a request. Exported so the single-header rule is testable. */
+export async function applyAuthHeader(req: { setHeader: (name: string, value: string) => void }): Promise<void> {
+  const fresh = await currentAccessToken();
+  req.setHeader("authorization", `Bearer ${fresh}`);
+}
+
 export async function uploadResumable(file: File, opts: ResumableUploadOptions): Promise<string> {
-  const token = await currentAccessToken();
+  // Fail fast if signed out; the per-request header itself is set in onBeforeRequest.
+  await currentAccessToken();
 
   return new Promise<string>((resolve, reject) => {
     let settled = false;
@@ -124,31 +148,28 @@ export async function uploadResumable(file: File, opts: ResumableUploadOptions):
       chunkSize: TUS_CHUNK_SIZE,
       uploadDataDuringCreation: true,
       removeFingerprintOnSuccess: true,
-      headers: {
-        authorization: `Bearer ${token}`,
-        apikey: SUPABASE_ANON_KEY,
-        "x-upsert": opts.upsert ? "true" : "false",
-      },
+      headers: staticUploadHeaders(opts.upsert),
       metadata: {
         bucketName: opts.bucket,
         objectName: opts.objectName,
         contentType: opts.contentType,
         cacheControl: opts.cacheControl ?? "3600",
       },
-      // Re-read the session before every request so a token that refreshes
-      // mid-upload (1 hour JWT, long upload) does not 401 the last chunks.
+      // The ONLY place the bearer token is set. Re-read before every request so
+      // a token that refreshes mid-upload (1 hour JWT, long upload) does not
+      // 401 the last chunks. If the session is gone, send no token and let the
+      // server answer; classifyUploadError turns that into "sign in again".
       onBeforeRequest: async (req) => {
         try {
-          const fresh = await currentAccessToken();
-          req.setHeader("authorization", `Bearer ${fresh}`);
+          await applyAuthHeader(req);
         } catch {
-          /* keep the original header; the server will say if it is stale */
+          /* signed out mid-upload: no header, server will reject, user is told to sign in */
         }
       },
       onShouldRetry: (err, retryAttempt) => {
         const status = (err as tus.DetailedError).originalResponse?.getStatus?.() ?? 0;
         // Do not hammer on errors that will not change by retrying.
-        if (status === 413 || status === 415 || status === 401 || status === 403 || status === 409) return false;
+        if (status === 400 || status === 413 || status === 415 || status === 401 || status === 403 || status === 409) return false;
         return retryAttempt < 5;
       },
       onProgress: (bytesUploaded, bytesTotal) => {
