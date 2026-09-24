@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { batchFetchAll } from "@/lib/batch-fetch";
-import { getVideoUrl } from "@/lib/storage";
+import { getVideoUrl, getVideoDownloadUrl } from "@/lib/storage";
 import AdminLayout from "@/components/layout/AdminLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +65,7 @@ import {
 import { formatDistanceToNow, startOfWeek, subWeeks, subDays, isAfter } from "date-fns";
 import { VideoThumbnail } from "@/components/video/VideoThumbnail";
 import { CopyableVideoId, isLegacyVideoId } from "@/components/video/CopyableVideoId";
+import { videoDownloadName } from "@/lib/video-id";
 import { CommentBubble } from "@/components/video/CommentBubble";
 import { VideoCommentThread } from "@/components/video/VideoCommentThread";
 import { VideoTrimDialog } from "@/components/admin/VideoTrimDialog";
@@ -1684,7 +1685,14 @@ export default function AdminSubmissions() {
           <DialogFooter className="gap-2">
             {selectedVideo?.video_url && (
               <Button variant="outline" asChild>
-                <a href={selectedVideo.video_url} download>
+                <a
+                  href={
+                    getVideoDownloadUrl(
+                      selectedVideo.video_url,
+                      videoDownloadName(selectedVideo.unique_video_id, selectedVideo.creator?.full_name, selectedVideo.video_url),
+                    ) ?? selectedVideo.video_url
+                  }
+                >
                   <Download className="w-4 h-4 mr-2" />
                   Download
                 </a>

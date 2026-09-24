@@ -1,27 +1,22 @@
 import { supabase } from "@/integrations/supabase/client";
 
-/**
- * Universal V-ID regex pattern.
- * Matches V[MONTH][DAY]-[SEQUENCE] format (e.g., V219-2, V1231-5)
- * Also matches legacy V[DAY]-[SEQ] format (e.g., V19-2)
- */
-export const V_ID_PATTERN = /\bV\d+-\d+\b/gi;
+import { findVideoIds } from "../../supabase/functions/_shared/video-id";
+
+export { findVideoIds, resolveVideoIdFromName, videoDownloadName } from "../../supabase/functions/_shared/video-id";
 
 /**
  * Extract the first V-tracking ID from a string (e.g., ad name).
- * Returns null if no match found.
+ * Returns null if no match found. Matching rules live in supabase/functions/_shared/video-id.ts.
  */
 export function extractVideoId(text: string): string | null {
-  const match = text.match(/\bV\d+-\d+\b/i);
-  return match ? match[0].toUpperCase() : null;
+  return findVideoIds(text)[0] ?? null;
 }
 
 /**
  * Extract ALL V-tracking IDs from a string.
  */
 export function extractAllVideoIds(text: string): string[] {
-  const matches = text.matchAll(/\bV\d+-\d+\b/gi);
-  return [...matches].map(m => m[0].toUpperCase());
+  return findVideoIds(text);
 }
 
 /**

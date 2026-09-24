@@ -18,6 +18,17 @@ export function getVideoUrl(videoUrl: string | null): string | null {
 }
 
 /**
+ * Link that downloads the original file under `filename` instead of the storage object name
+ * (`1790292037873-7jntuquhh.mov`). Storage sets Content-Disposition from `?download=`, so the
+ * browser streams straight to disk, bytes untouched. A cross-origin `<a download>` can't rename.
+ */
+export function getVideoDownloadUrl(videoUrl: string | null, filename: string): string | null {
+  const url = getVideoUrl(videoUrl);
+  if (!url) return null;
+  return `${url}${url.includes("?") ? "&" : "?"}download=${encodeURIComponent(filename)}`;
+}
+
+/**
  * Converts an avatar path to a full public URL.
  */
 export function getAvatarUrl(avatarUrl: string | null): string | null {

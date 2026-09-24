@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { getVideoUrl } from "@/lib/storage";
+import { getVideoUrl, getVideoDownloadUrl } from "@/lib/storage";
+import { videoDownloadName } from "@/lib/video-id";
 import { supabase } from "@/integrations/supabase/client";
 import { X, Loader2, DollarSign, Eye, MousePointer, ShoppingCart, TrendingUp, BarChart3, Crosshair, Megaphone, Download } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CopyableVideoId } from "@/components/video/CopyableVideoId";
@@ -33,7 +33,6 @@ export function VideoMetricsDialog({
   title,
   uniqueVideoId,
 }: VideoMetricsDialogProps) {
-  const { toast } = useToast();
   const fullVideoUrl = videoUrl ? getVideoUrl(videoUrl) : null;
   const [metrics, setMetrics] = useState<AggregatedMetrics | null>(null);
   const [loading, setLoading] = useState(false);
@@ -143,31 +142,17 @@ export function VideoMetricsDialog({
                 )}
               </div>
               {fullVideoUrl && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    try {
-                      toast({ title: "Downloading…" });
-                      const res = await fetch(fullVideoUrl);
-                      const blob = await res.blob();
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement("a");
-                      a.href = url;
-                      a.download = `${uniqueVideoId || "video"}.mp4`;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      URL.revokeObjectURL(url);
-                      toast({ title: "Download complete ✅" });
-                    } catch {
-                      toast({ title: "Download failed", variant: "destructive" });
+                <Button variant="outline" size="sm" asChild>
+                  <a
+                    href={
+                      getVideoDownloadUrl(videoUrl ?? null, videoDownloadName(uniqueVideoId || "video", null, fullVideoUrl)) ??
+                      fullVideoUrl
                     }
-                  }}
-                >
+                    onClick={(e) => e.stopPropagation()}
+                  >
                   <Download className="w-4 h-4 mr-1" />
                   Save
+                  </a>
                 </Button>
               )}
             </div>

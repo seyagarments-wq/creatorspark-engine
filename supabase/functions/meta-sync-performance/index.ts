@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveVideoIdFromName } from "../_shared/video-id.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -362,7 +363,7 @@ serve(async (req) => {
     const until = isoDate(now);
     console.log(`Sync window: ${since} -> ${until} (daily)`);
 
-    const vidPattern = /\bV(\d+)-(\d+)\b/g;
+    let ambiguousNames = 0;
 
     for (const ad of allAds) {
       let matchedVideo: any = null;
@@ -374,13 +375,13 @@ serve(async (req) => {
       }
 
       if (!matchedVideo && ad.name) {
-        const matches = [...ad.name.matchAll(vidPattern)];
-        for (const match of matches) {
-          const vid = match[0];
-          if (vidByUniqueId.has(vid)) {
-            matchedVideo = vidByUniqueId.get(vid);
-            break;
-          }
+        const resolved = resolveVideoIdFromName(ad.name, (id) => vidByUniqueId.has(id));
+        if (resolved.status === "match") {
+          matchedVideo = vidByUniqueId.get(resolved.id);
+        } else if (resolved.status === "ambiguous") {
+          // Two creators' V-IDs in one ad name: credit nobody rather than guess.
+          ambiguousNames++;
+          console.warn(`Ad ${ad.id} "${ad.name}" names ${resolved.ids.join(", ")}; not credited to any video`);
         }
       }
 
@@ -411,7 +412,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Matched ${processedAdIds.size} ads to ${videoTotalsByDate.size} videos`);
+    console.log(`Matched ${processedAdIds.size} ads to ${videoTotalsByDate.size} videos (${ambiguousNames} ad names skipped as ambiguous)`);
 
     for (const video of platformVideos) {
       const totalsByDate = videoTotalsByDate.get(video.id);
@@ -464,6 +465,7 @@ serve(async (req) => {
         total_impressions: totalSyncedImpressions,
         total_revenue: totalSyncedRevenue,
         rate_limited: rateLimited,
+        ambiguous_ad_names: ambiguousNames,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

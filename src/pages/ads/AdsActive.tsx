@@ -67,6 +67,7 @@ import { useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { extractVideoId } from "@/lib/video-id";
 
 interface MetaObject {
   id: string;
@@ -588,9 +589,8 @@ export default function AdsActive() {
       if (mapping?.videos) return mapping.videos as any;
 
       const adName = selectedAd.object_name || "";
-      const vIdMatch = adName.match(/\bV\d+-\d+\b/i);
-      if (vIdMatch) {
-        const vId = vIdMatch[0].toUpperCase();
+      const vId = extractVideoId(adName);
+      if (vId) {
         const { data: videoByVId } = await supabase
           .from("videos")
           .select("video_url, thumbnail_url, title, unique_video_id")

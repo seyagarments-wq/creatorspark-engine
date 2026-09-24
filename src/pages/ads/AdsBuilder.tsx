@@ -19,6 +19,7 @@ import {
   User, TrendingUp, DollarSign, Calendar, Target, BarChart3, AlertTriangle, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { extractVideoId } from "@/lib/video-id";
 
 const STEPS = [
   { label: "Select Submissions", icon: Video },
@@ -197,12 +198,9 @@ export default function AdsBuilder() {
         const videosByVId = new Map(videos.map(v => [v.unique_video_id, v.id]));
         for (const insight of recentInsights) {
           const adName = insight.object_name || "";
-          const match = adName.match(/\bV\d+-\d+\b/i);
-          if (match) {
-            const vId = match[0].toUpperCase();
-            const videoId = videosByVId.get(vId);
-            if (videoId) set.add(videoId);
-          }
+          const vId = extractVideoId(adName);
+          const videoId = vId ? videosByVId.get(vId) : undefined;
+          if (videoId) set.add(videoId);
         }
       }
       return set;
@@ -1174,7 +1172,7 @@ export default function AdsBuilder() {
 }
 
 function generateAdName(video: any, presets: any): string {
-  const template = presets?.naming_template || "{creator}_{product}_{date}";
+  const template = presets?.naming_template || "{trybeid} - {creator} - {product}";
   const creatorName = video.profiles?.full_name || "Creator";
   const date = new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" }).replace(" ", "");
   return template

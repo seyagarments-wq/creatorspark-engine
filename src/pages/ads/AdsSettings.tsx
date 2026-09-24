@@ -376,7 +376,7 @@ function LandingPagesTab({ pages }: { pages: any[] }) {
 // ── Naming Convention Tab ──
 function NamingTab({ presets }: { presets: any }) {
   const queryClient = useQueryClient();
-  const [template, setTemplate] = useState(presets?.naming_template || "{creator}_{product}_{date}");
+  const [template, setTemplate] = useState(presets?.naming_template || "{trybeid} - {creator} - {product}");
 
   const save = useMutation({
     mutationFn: async () => {
