@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { getSecret } from "../_shared/secrets.ts";
+import { shopifyFetch } from "../_shared/shopify.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,70 +21,14 @@ interface ShopifyProduct {
   }[];
 }
 
-async function getAccessToken(): Promise<string> {
-  const shopDomain = (await getSecret("SHOPIFY_STORE_DOMAIN"));
-  const directToken = (await getSecret("SHOPIFY_ACCESS_TOKEN"));
-  if (directToken) return directToken;
-
-  const clientId = (await getSecret("SHOPIFY_CLIENT_ID"));
-  const clientSecret = (await getSecret("SHOPIFY_CLIENT_SECRET"));
-
-  if (!shopDomain || !clientId || !clientSecret) {
-    throw new Error("Missing Shopify credentials");
-  }
-
-
-  console.log("Requesting access token for shop:", shopDomain);
-
-  const tokenUrl = `https://${shopDomain}/admin/oauth/access_token`;
-  
-  const response = await fetch(tokenUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: "client_credentials",
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("Token request failed:", response.status, errorText);
-    throw new Error(`Failed to get access token: ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  console.log("Successfully obtained access token");
-  return data.access_token;
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const shopDomain = (await getSecret("SHOPIFY_STORE_DOMAIN"));
-    if (!shopDomain) {
-      throw new Error("SHOPIFY_STORE_DOMAIN not configured");
-    }
-
-    const accessToken = await getAccessToken();
-
-    // Fetch active products from Shopify
-    const productsUrl = `https://${shopDomain}/admin/api/2024-01/products.json?status=active&limit=50`;
-    
-    console.log("Fetching products from Shopify...");
-    
-    const response = await fetch(productsUrl, {
-      headers: {
-        "X-Shopify-Access-Token": accessToken,
-        "Content-Type": "application/json",
-      },
-    });
+    // Active products only. 250 is Shopify's page maximum; the catalog is well under that.
+    const response = await shopifyFetch("products.json?status=active&limit=250");
 
     if (!response.ok) {
       const errorText = await response.text();

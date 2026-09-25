@@ -2957,6 +2957,56 @@ export type Database = {
         }
         Relationships: []
       }
+      sample_request_items: {
+        Row: {
+          created_at: string
+          id: string
+          position: number
+          product_image: string | null
+          product_title: string
+          removed_at: string | null
+          removed_reason: string | null
+          request_id: string
+          shopify_product_id: string
+          shopify_variant_id: string
+          variant_title: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          position: number
+          product_image?: string | null
+          product_title: string
+          removed_at?: string | null
+          removed_reason?: string | null
+          request_id: string
+          shopify_product_id: string
+          shopify_variant_id: string
+          variant_title?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          position?: number
+          product_image?: string | null
+          product_title?: string
+          removed_at?: string | null
+          removed_reason?: string | null
+          request_id?: string
+          shopify_product_id?: string
+          shopify_variant_id?: string
+          variant_title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sample_request_items_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "sample_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sample_requests: {
         Row: {
           admin_notes: string | null
@@ -2975,7 +3025,9 @@ export type Database = {
           shipping_state: string | null
           shipping_zip: string | null
           shopify_draft_order_id: string | null
+          shopify_order_claimed_at: string | null
           shopify_order_id: string | null
+          shopify_order_name: string | null
           shopify_product_id: string | null
           shopify_product_image: string | null
           shopify_product_title: string | null
@@ -3002,7 +3054,9 @@ export type Database = {
           shipping_state?: string | null
           shipping_zip?: string | null
           shopify_draft_order_id?: string | null
+          shopify_order_claimed_at?: string | null
           shopify_order_id?: string | null
+          shopify_order_name?: string | null
           shopify_product_id?: string | null
           shopify_product_image?: string | null
           shopify_product_title?: string | null
@@ -3029,7 +3083,9 @@ export type Database = {
           shipping_state?: string | null
           shipping_zip?: string | null
           shopify_draft_order_id?: string | null
+          shopify_order_claimed_at?: string | null
           shopify_order_id?: string | null
+          shopify_order_name?: string | null
           shopify_product_id?: string | null
           shopify_product_image?: string | null
           shopify_product_title?: string | null
@@ -3581,6 +3637,18 @@ export type Database = {
       auth_user_id_for_email: { Args: { _email: string }; Returns: string }
       bonus_rate_for: { Args: { p_revenue: number }; Returns: number }
       calculate_level: { Args: { xp: number }; Returns: number }
+      create_sample_request: {
+        Args: {
+          p_brand_id: string
+          p_items: Json
+          p_shipping_address: string
+          p_shipping_city: string
+          p_shipping_country: string
+          p_shipping_state: string
+          p_shipping_zip: string
+        }
+        Returns: string
+      }
       get_my_cohort_ids: { Args: never; Returns: string[] }
       get_my_profile_id: { Args: never; Returns: string }
       get_next_video_sequence: {

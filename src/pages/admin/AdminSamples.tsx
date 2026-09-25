@@ -4,6 +4,15 @@ import AdminLayout from "@/components/layout/AdminLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { ReviewSampleOrderDialog } from "@/components/samples/ReviewSampleOrderDialog";
+import {
+  activeItems,
+  isStaleClaim,
+  itemsSummary,
+  requestItems,
+  sizeLabel,
+  type SampleItem,
+} from "../../../supabase/functions/_shared/sample-order";
 import {
   Table,
   TableBody,
@@ -67,6 +76,9 @@ interface SampleRequest {
   shopify_variant_title: string | null;
   shopify_product_image: string | null;
   shopify_draft_order_id: string | null;
+  shopify_order_claimed_at: string | null;
+  shopify_order_name: string | null;
+  items: SampleItem[];
   creator: {
     id: string;
     full_name: string;
@@ -96,6 +108,7 @@ export default function AdminSamples() {
   // Reject dialog state
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [reviewRequest, setReviewRequest] = useState<SampleRequest | null>(null);
 
   useEffect(() => {
     fetchRequests();
@@ -105,6 +118,12 @@ export default function AdminSamples() {
     filterRequests();
   }, [requests, searchQuery, statusFilter]);
 
+  // Keep an open review dialog on the fresh row after a refetch (e.g. a failed approval that
+  // left a claim), so it never shows stale order state.
+  useEffect(() => {
+    setReviewRequest((open) => (open ? requests.find((r) => r.id === open.id) ?? null : open));
+  }, [requests]);
+
   async function fetchRequests() {
     try {
       const { data, error } = await supabase
@@ -112,12 +131,13 @@ export default function AdminSamples() {
         .select(`
           *,
           creator:profiles(id, full_name, email),
-          brand:brands(id, name)
+          brand:brands(id, name),
+          items:sample_request_items(*)
         `)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setRequests(data || []);
+      setRequests((data || []).map((r) => ({ ...r, items: requestItems(r, r.items) })));
     } catch (error) {
       console.error("Error fetching requests:", error);
     } finally {
@@ -136,6 +156,7 @@ export default function AdminSamples() {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(r =>
         r.product_name.toLowerCase().includes(query) ||
+        r.items.some((i) => i.product_title.toLowerCase().includes(query)) ||
         r.creator?.full_name.toLowerCase().includes(query) ||
         r.creator?.email.toLowerCase().includes(query) ||
         r.brand?.name.toLowerCase().includes(query)
@@ -240,43 +261,13 @@ export default function AdminSamples() {
     }
   }
 
-  async function approveWithShopifyOrder(request: SampleRequest) {
-    if (!request.shopify_variant_id) {
-      // No Shopify product selected - just approve normally
+  function approveWithShopifyOrder(request: SampleRequest) {
+    if (request.items.length === 0) {
+      // No Shopify product on this request - just approve normally
       updateStatus(request.id, "approved");
       return;
     }
-
-    setActionLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke(
-        "shopify-create-sample-order",
-        {
-          body: { sampleRequestId: request.id },
-        }
-      );
-
-      if (error) throw error;
-      if (data.error) throw new Error(data.error);
-
-      // Approval notification is sent server-side from shopify-create-sample-order
-      // for reliability, so no client-side notification call is needed here.
-
-      toast({
-        title: "Draft order created!",
-        description: `Shopify draft order #${data.draftOrderId} created successfully`,
-      });
-      fetchRequests();
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to create Shopify order";
-      toast({
-        title: "Error creating Shopify order",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    } finally {
-      setActionLoading(false);
-    }
+    setReviewRequest(request);
   }
 
   function handleRejectRequest() {
@@ -465,12 +456,10 @@ export default function AdminSamples() {
               {filteredRequests.map((request) => (
                 <div key={request.id} className="border rounded-lg p-3 bg-card space-y-2">
                   <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      {request.shopify_product_image && (
-                        <img src={request.shopify_product_image} alt="" className="w-10 h-10 object-cover rounded" />
-                      )}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <OrderThumbs items={request.items} />
                       <div className="min-w-0">
-                        <p className="font-medium text-sm truncate">{request.product_name}</p>
+                        <p className="font-medium text-sm truncate">{orderTitle(request)}</p>
                         <p className="text-xs text-muted-foreground truncate">{request.creator?.full_name}</p>
                       </div>
                     </div>
@@ -491,7 +480,7 @@ export default function AdminSamples() {
                             <>
                               <DropdownMenuItem onClick={() => approveWithShopifyOrder(request)} disabled={actionLoading}>
                                 <CheckCircle className="w-4 h-4 mr-2" />
-                                {request.shopify_variant_id ? "Approve & Order" : "Approve"}
+                                {request.items.length ? "Review & Order" : "Approve"}
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => { setSelectedRequest(request); setRejectionReason(""); setRejectDialogOpen(true); }}>
                                 <XCircle className="w-4 h-4 mr-2" /> Reject
@@ -541,16 +530,21 @@ export default function AdminSamples() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          {request.shopify_product_image && (
-                            <img src={request.shopify_product_image} alt={request.product_name} className="w-10 h-10 object-cover rounded" />
-                          )}
-                          <div>
-                            <p className="font-medium">{request.product_name}</p>
-                            {request.shopify_variant_title && request.shopify_variant_title !== "Default Title" && (
-                              <p className="text-xs text-muted-foreground truncate max-w-[200px]">{request.shopify_variant_title}</p>
+                          <OrderThumbs items={request.items} />
+                          <div className="min-w-0">
+                            <p className="font-medium truncate max-w-[240px]">{orderTitle(request)}</p>
+                            <p className="text-xs text-muted-foreground truncate max-w-[240px]">
+                              {activeItems(request.items).map((i) => sizeLabel(i.variant_title) ?? "One size").join(" · ")}
+                            </p>
+                            {(request.shopify_order_name || request.shopify_draft_order_id) && (
+                              <p className="text-xs text-success">
+                                {request.shopify_order_name ? `Order ${request.shopify_order_name}` : `Draft Order: #${request.shopify_draft_order_id}`}
+                              </p>
                             )}
-                            {request.shopify_draft_order_id && (
-                              <p className="text-xs text-success">Draft Order: #{request.shopify_draft_order_id}</p>
+                            {request.status === "requested" && request.shopify_order_claimed_at && (
+                              <p className="text-xs text-destructive">
+                                {isStaleClaim(request.shopify_order_claimed_at) ? "Order attempt didn't finish" : "Ordering…"}
+                              </p>
                             )}
                           </div>
                         </div>
@@ -571,7 +565,7 @@ export default function AdminSamples() {
                               <>
                                 <DropdownMenuItem onClick={() => approveWithShopifyOrder(request)} disabled={actionLoading}>
                                   <CheckCircle className="w-4 h-4 mr-2" />
-                                  {request.shopify_variant_id ? "Approve & Create Order" : "Approve"}
+                                  {request.items.length ? "Review & Order" : "Approve"}
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => { setSelectedRequest(request); setRejectionReason(""); setRejectDialogOpen(true); }}>
                                   <XCircle className="w-4 h-4 mr-2" /> Reject
@@ -599,6 +593,12 @@ export default function AdminSamples() {
           </>
         )}
       </div>
+
+      <ReviewSampleOrderDialog
+        request={reviewRequest}
+        onOpenChange={(open) => !open && setReviewRequest(null)}
+        onDone={fetchRequests}
+      />
 
       {/* Ship Dialog */}
       <Dialog open={shipDialogOpen} onOpenChange={setShipDialogOpen}>
@@ -680,5 +680,35 @@ export default function AdminSamples() {
         </DialogContent>
       </Dialog>
     </AdminLayout>
+  );
+}
+
+/** "Daydream Hoodie — Pink + 2 more" from the items still in the order. */
+function orderTitle(request: SampleRequest): string {
+  const kept = activeItems(request.items);
+  const dropped = request.items.length - kept.length;
+  if (request.items.length === 0) return request.product_name;
+  return `${itemsSummary(kept.length ? kept : request.items)}${dropped ? ` (${dropped} dropped)` : ""}`;
+}
+
+function OrderThumbs({ items }: { items: SampleItem[] }) {
+  const shown = activeItems(items).slice(0, 3);
+  if (shown.length === 0) return null;
+  return (
+    <div className="flex shrink-0 -space-x-3">
+      {shown.map((i, n) =>
+        i.product_image ? (
+          <img
+            key={i.shopify_product_id}
+            src={i.product_image}
+            alt=""
+            className="w-10 h-10 object-cover rounded ring-2 ring-background"
+            style={{ zIndex: shown.length - n }}
+          />
+        ) : (
+          <div key={i.shopify_product_id} className="w-10 h-10 rounded bg-muted ring-2 ring-background" style={{ zIndex: shown.length - n }} />
+        ),
+      )}
+    </div>
   );
 }
