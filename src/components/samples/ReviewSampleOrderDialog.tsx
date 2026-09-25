@@ -11,7 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { sizeLabel, type SampleItem } from "../../../supabase/functions/_shared/sample-order";
+import { isStaleClaim, sizeLabel, type SampleItem } from "../../../supabase/functions/_shared/sample-order";
 
 const DROP_REASONS = ["Out of stock", "Not available for samples", "Already sent to you"];
 
@@ -35,7 +35,7 @@ interface Props {
  */
 export function ReviewSampleOrderDialog({ request, onOpenChange, onDone }: Props) {
   const { toast } = useToast();
-  const { data: products, isLoading: stockLoading } = useShopifyProducts();
+  const { data: products, isLoading: stockLoading, isError: stockError } = useShopifyProducts();
   const stock = useMemo(() => variantIndex(products), [products]);
   const [keep, setKeep] = useState<Record<string, boolean>>({});
   const [reason, setReason] = useState<Record<string, string>>({});
@@ -49,7 +49,11 @@ export function ReviewSampleOrderDialog({ request, onOpenChange, onDone }: Props
 
   if (!request) return null;
   const kept = request.items.filter((i) => keep[i.shopify_product_id]);
-  const stuck = request.status === "requested" && !!request.shopify_order_claimed_at;
+  const claimed = request.status === "requested" && !!request.shopify_order_claimed_at;
+  // A fresh claim is a call that may still be running: never race it. A stale one is a dead call
+  // the function lets us take over (atomically, server side).
+  const stuck = claimed && isStaleClaim(request.shopify_order_claimed_at);
+  const inFlight = claimed && !stuck;
 
   async function approve() {
     if (!request || kept.length === 0) return;
@@ -67,13 +71,8 @@ export function ReviewSampleOrderDialog({ request, onOpenChange, onDone }: Props
         if (error) throw new Error(`Couldn't update ${i.product_title}: ${error.message}`);
       }
 
-      if (stuck) {
-        const { error } = await supabase.from("sample_requests").update({ shopify_order_claimed_at: null }).eq("id", request.id);
-        if (error) throw new Error(error.message);
-      }
-
       const { data, error } = await supabase.functions.invoke("shopify-create-sample-order", {
-        body: { sampleRequestId: request.id },
+        body: { sampleRequestId: request.id, takeOver: stuck },
       });
       if (error) throw new Error(await functionErrorMessage(error, "Couldn't create the Shopify order."));
       if (data?.error) throw new Error(data.error);
@@ -110,13 +109,23 @@ export function ReviewSampleOrderDialog({ request, onOpenChange, onDone }: Props
           </DialogDescription>
         </DialogHeader>
 
+        {inFlight && (
+          <Alert>
+            <AlertTriangle className="w-4 h-4" />
+            <AlertDescription>
+              This order is being placed right now (started {new Date(request.shopify_order_claimed_at!).toLocaleTimeString()}).
+              Give it a few minutes, then refresh.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {stuck && (
           <Alert variant="destructive">
             <AlertTriangle className="w-4 h-4" />
             <AlertDescription>
               An order attempt started {new Date(request.shopify_order_claimed_at!).toLocaleString()} and didn't finish.
-              Search Shopify orders for <span className="font-mono">{request.id.slice(0, 8)}</span> first. Only approve
-              again if there's no order, or the creator gets two.
+              Approving again first checks whether Shopify already made the order and records it if so. If
+              you placed an order for this creator by hand, reject instead.
             </AlertDescription>
           </Alert>
         )}
@@ -150,8 +159,15 @@ export function ReviewSampleOrderDialog({ request, onOpenChange, onDone }: Props
                       {size ? `Size ${size}` : "One size"}
                       {v?.sku ? ` · ${v.sku}` : ""}
                     </p>
+                    {v && (v.product.id !== i.shopify_product_id || v.product.title !== i.product_title || v.title !== (i.variant_title ?? v.title)) && (
+                      <p className="text-xs text-destructive">
+                        Shopify says: {v.product.title}{sizeLabel(v.title) ? ` (${sizeLabel(v.title)})` : ""}
+                      </p>
+                    )}
                   </label>
-                  {stockLoading ? null : v ? (
+                  {stockLoading ? null : stockError ? (
+                    <Badge variant="outline" className="text-[11px] shrink-0">Stock unknown</Badge>
+                  ) : v ? (
                     <Badge variant={v.inventory > 0 ? "outline" : "destructive"} className="text-[11px] shrink-0">
                       {v.inventory > 0 ? `${v.inventory} in stock` : "Out of stock"}
                     </Badge>
@@ -180,9 +196,9 @@ export function ReviewSampleOrderDialog({ request, onOpenChange, onDone }: Props
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={busy}>Cancel</Button>
-          <Button variant="success" onClick={approve} disabled={busy || kept.length === 0}>
+          <Button variant="success" onClick={approve} disabled={busy || kept.length === 0 || inFlight}>
             <CheckCircle className="w-4 h-4 mr-2" />
-            {busy ? "Ordering…" : stuck ? "Checked Shopify, order again" : `Approve & Order (${kept.length})`}
+            {busy ? "Ordering…" : stuck ? `Retry order (${kept.length})` : `Approve & Order (${kept.length})`}
           </Button>
         </DialogFooter>
       </DialogContent>

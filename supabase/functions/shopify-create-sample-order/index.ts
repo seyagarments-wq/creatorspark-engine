@@ -7,8 +7,11 @@ import {
   activeItems,
   approvalMessage,
   buildSampleDraftOrder,
+  isOwnDraft,
+  itemLabel,
   itemsSummary,
   requestItems,
+  STALE_CLAIM_MS,
   type SampleItem,
 } from "../_shared/sample-order.ts";
 
@@ -31,7 +34,7 @@ function sleep(ms: number): Promise<void> {
 async function completeDraftOrder(
   draftOrderId: number,
   maxRetries: number = 3
-): Promise<{ orderId: number | null; orderName: string | null }> {
+): Promise<number | null> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     console.log(`Completing draft order attempt ${attempt}/${maxRetries}`);
     
@@ -42,10 +45,7 @@ async function completeDraftOrder(
 
     if (response.ok) {
       const data = await response.json();
-      return {
-        orderId: data.draft_order?.order_id || null,
-        orderName: data.draft_order?.name || null,
-      };
+      return data.draft_order?.order_id || null;
     }
 
     const errorText = await response.text();
@@ -69,6 +69,42 @@ async function completeDraftOrder(
   throw new Error("Max retries reached");
 }
 
+/** A draft order as Shopify has it now, or null if it's gone. */
+async function getDraftOrder(
+  draftOrderId: string | number,
+): Promise<{ id: number; order_id: number | null; status: string; note: string | null; tags: string | null } | null> {
+  const res = await shopifyFetch(`draft_orders/${draftOrderId}.json?fields=id,order_id,status,note,tags`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Couldn't read draft order ${draftOrderId}: ${res.status} - ${await res.text()}`);
+  return (await res.json()).draft_order ?? null;
+}
+
+/**
+ * Each item's variant must exist and belong to the product it claims to. The creator's browser
+ * supplies these ids, and the one-size-per-product rule is only as good as the product ids.
+ */
+async function verifyItemsAgainstShopify(items: SampleItem[]) {
+  for (const i of items) {
+    const res = await shopifyFetch(`variants/${i.shopify_variant_id}.json?fields=id,product_id`);
+    if (res.status === 404) throw new HttpError(409, `${itemLabel(i)} no longer exists in Shopify. Drop it and approve again.`);
+    if (!res.ok) throw new Error(`Couldn't check ${itemLabel(i)} in Shopify: ${res.status} - ${await res.text()}`);
+    const variant = (await res.json()).variant;
+    if (String(variant?.product_id) !== i.shopify_product_id) {
+      throw new HttpError(409, `${itemLabel(i)} doesn't match Shopify (that size belongs to a different product). Drop it or reject the request.`);
+    }
+  }
+}
+
+/** "#1234". The draft's own name is "#D12", which isn't what shows in the Orders list. */
+async function orderName(orderId: number): Promise<string | null> {
+  try {
+    const res = await shopifyFetch(`orders/${orderId}.json?fields=name`);
+    return res.ok ? ((await res.json()).order?.name ?? null) : null;
+  } catch {
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -80,14 +116,15 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
-  let claimedId: string | null = null;
+  // The exact claim this call holds, so an error only ever releases its own claim.
+  let myClaim: { id: string; at: string } | null = null;
 
   try {
     if (req.method !== "POST") throw new HttpError(405, "Use POST.");
     // verify_jwt is off for this function, so this is its only gate: admins only.
     await requirePayoutCaller(req, supabase);
 
-    const { sampleRequestId, dryRun: askedDryRun } = await req.json().catch(() => ({}));
+    const { sampleRequestId, dryRun: askedDryRun, takeOver } = await req.json().catch(() => ({}));
     if (typeof sampleRequestId !== "string" || !sampleRequestId) throw new HttpError(400, "sampleRequestId is required");
     const dryRun = askedDryRun === true || !ordersLive();
 
@@ -103,6 +140,7 @@ serve(async (req) => {
     }
 
     const items: SampleItem[] = requestItems(sampleRequest, sampleRequest.items);
+    if (activeItems(items).length === 0) throw new HttpError(400, "This request has no items left to order. Reject it instead.");
     const draftOrderPayload = buildSampleDraftOrder(sampleRequest, sampleRequest.creator, items);
 
     if (dryRun) {
@@ -116,51 +154,97 @@ serve(async (req) => {
     }
 
     // Claim before touching Shopify. Only one call can win this update, so a double click or a
-    // replayed request can never create a second free order.
-    const { data: claimed, error: claimError } = await supabase
+    // replayed request can never create a second free order. A claim older than STALE_CLAIM_MS is
+    // a dead call; an admin can take it over (takeOver), atomically, in the same update.
+    const claimAt = new Date().toISOString();
+    let claimQuery = supabase
       .from("sample_requests")
-      .update({ shopify_order_claimed_at: new Date().toISOString() })
+      .update({ shopify_order_claimed_at: claimAt })
       .eq("id", sampleRequestId)
       .eq("status", "requested")
-      .is("shopify_order_claimed_at", null)
-      .is("shopify_order_id", null)
-      .select("id");
+      .is("shopify_order_id", null);
+    claimQuery = takeOver === true
+      ? claimQuery.or(`shopify_order_claimed_at.is.null,shopify_order_claimed_at.lt.${new Date(Date.now() - STALE_CLAIM_MS).toISOString()}`)
+      : claimQuery.is("shopify_order_claimed_at", null);
+    const { data: claimed, error: claimError } = await claimQuery.select("id");
     if (claimError) throw new Error(`Could not claim the request: ${claimError.message}`);
     if (!claimed || claimed.length === 0) {
-      throw new HttpError(409, "An order for this request is already in progress. Check Shopify before trying again.");
+      throw new HttpError(409, "An order for this request is already being placed. Give it a few minutes, then refresh.");
     }
-    claimedId = sampleRequestId;
+    myClaim = { id: sampleRequestId, at: claimAt };
 
-    console.log(`Creating Shopify order for sample request ${sampleRequestId} (${draftOrderPayload.draft_order.line_items.length} lines)`);
-    const draftOrderResponse = await shopifyFetch("draft_orders.json", {
-      method: "POST",
-      body: JSON.stringify(draftOrderPayload),
-    });
-    if (!draftOrderResponse.ok) {
-      const errorText = await draftOrderResponse.text();
-      throw new Error(`Failed to create draft order: ${draftOrderResponse.status} - ${errorText}`);
+    // Idempotency: a previous attempt may have left a draft. If Shopify already turned it into an
+    // order (the reply was lost, or the function died after completing), record that order
+    // instead of placing a second one. An open leftover draft is deleted and rebuilt, because
+    // the admin may have dropped items since.
+    let orderId: number | null = null;
+    let draftId: number | null = null;
+    if (sampleRequest.shopify_draft_order_id) {
+      const found = await getDraftOrder(sampleRequest.shopify_draft_order_id);
+      // Only a draft this function made for this request counts. Anything else is ignored, never
+      // recorded as this request's order and never deleted.
+      const previous = found && isOwnDraft(found, sampleRequestId) ? found : null;
+      if (found && !previous) console.warn(`Draft ${found.id} on request ${sampleRequestId} isn't a sample draft for it; ignoring`);
+      if (previous?.order_id) {
+        orderId = previous.order_id;
+        draftId = previous.id;
+        console.log(`Draft ${previous.id} was already completed as order ${orderId}; recording it`);
+      } else if (previous && previous.status !== "completed") {
+        await shopifyFetch(`draft_orders/${previous.id}.json`, { method: "DELETE" }).catch((e) =>
+          console.warn(`Couldn't delete leftover draft ${previous.id}:`, e),
+        );
+      }
     }
-    const draftOrder = (await draftOrderResponse.json()).draft_order;
 
-    // Wait a moment for Shopify to finish calculations
-    await sleep(1000);
-    const { orderId, orderName } = await completeDraftOrder(draftOrder.id, 3);
+    if (!orderId) {
+      await verifyItemsAgainstShopify(activeItems(items));
+      console.log(`Creating Shopify order for sample request ${sampleRequestId} (${draftOrderPayload.draft_order.line_items.length} lines)`);
+      const draftOrderResponse = await shopifyFetch("draft_orders.json", {
+        method: "POST",
+        body: JSON.stringify(draftOrderPayload),
+      });
+      if (!draftOrderResponse.ok) {
+        const errorText = await draftOrderResponse.text();
+        throw new Error(`Failed to create draft order: ${draftOrderResponse.status} - ${errorText}`);
+      }
+      draftId = (await draftOrderResponse.json()).draft_order.id as number;
+      // Remember the draft before completing it, so a retry can find out what happened to it.
+      await supabase.from("sample_requests").update({ shopify_draft_order_id: String(draftId) }).eq("id", sampleRequestId);
+
+      // Wait a moment for Shopify to finish calculations
+      await sleep(1000);
+      try {
+        orderId = await completeDraftOrder(draftId, 3);
+      } catch (completeError) {
+        // The error may have come after Shopify completed it. Ask before calling it a failure.
+        const now = await getDraftOrder(draftId).catch(() => null);
+        if (!now?.order_id) throw completeError;
+        orderId = now.order_id;
+      }
+      if (!orderId) {
+        const now = await getDraftOrder(draftId).catch(() => null);
+        orderId = now?.order_id ?? null;
+      }
+      if (!orderId) throw new Error(`Shopify completed draft ${draftId} but returned no order id`);
+    }
+
     // The order exists now. From here on the claim stays, even on error, so nobody retries into
     // a duplicate; the error below names the order to look for.
-    claimedId = null;
-    console.log("Order created:", orderId, orderName);
+    myClaim = null;
+    const name = await orderName(orderId);
+    console.log("Order created:", orderId, name);
 
     const { error: updateError } = await supabase
       .from("sample_requests")
       .update({
-        shopify_draft_order_id: draftOrder.id.toString(),
-        shopify_order_id: orderId?.toString() || null,
-        shopify_order_name: orderName,
+        shopify_draft_order_id: draftId ? String(draftId) : sampleRequest.shopify_draft_order_id,
+        shopify_order_id: String(orderId),
+        shopify_order_name: name,
         status: "approved",
       })
       .eq("id", sampleRequestId);
     if (updateError) {
-      throw new Error(`Shopify order ${orderName ?? orderId} was created but saving it failed: ${updateError.message}`);
+      throw new Error(`Shopify order ${name ?? orderId} was created but saving it failed: ${updateError.message}`);
     }
 
     try {
@@ -192,16 +276,20 @@ serve(async (req) => {
     return json({
       success: true,
       dryRun: false,
-      draftOrderId: draftOrder.id,
+      draftOrderId: draftId,
       orderId,
-      orderName,
+      orderName: name,
       summary: itemsSummary(activeItems(items)),
       lineCount: draftOrderPayload.draft_order.line_items.length,
     });
   } catch (error: unknown) {
     // Shopify never completed an order: release the claim so the admin can retry.
-    if (claimedId) {
-      await supabase.from("sample_requests").update({ shopify_order_claimed_at: null }).eq("id", claimedId);
+    if (myClaim) {
+      await supabase
+        .from("sample_requests")
+        .update({ shopify_order_claimed_at: null })
+        .eq("id", myClaim.id)
+        .eq("shopify_order_claimed_at", myClaim.at);
     }
     const status = error instanceof HttpError ? error.status : 500;
     const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";

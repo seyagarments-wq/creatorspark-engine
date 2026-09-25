@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { ReviewSampleOrderDialog } from "@/components/samples/ReviewSampleOrderDialog";
 import {
   activeItems,
+  isStaleClaim,
   itemsSummary,
   requestItems,
   sizeLabel,
@@ -116,6 +117,12 @@ export default function AdminSamples() {
   useEffect(() => {
     filterRequests();
   }, [requests, searchQuery, statusFilter]);
+
+  // Keep an open review dialog on the fresh row after a refetch (e.g. a failed approval that
+  // left a claim), so it never shows stale order state.
+  useEffect(() => {
+    setReviewRequest((open) => (open ? requests.find((r) => r.id === open.id) ?? null : open));
+  }, [requests]);
 
   async function fetchRequests() {
     try {
@@ -527,7 +534,7 @@ export default function AdminSamples() {
                           <div className="min-w-0">
                             <p className="font-medium truncate max-w-[240px]">{orderTitle(request)}</p>
                             <p className="text-xs text-muted-foreground truncate max-w-[240px]">
-                              {request.items.map((i) => sizeLabel(i.variant_title) ?? "One size").join(" · ")}
+                              {activeItems(request.items).map((i) => sizeLabel(i.variant_title) ?? "One size").join(" · ")}
                             </p>
                             {(request.shopify_order_name || request.shopify_draft_order_id) && (
                               <p className="text-xs text-success">
@@ -535,7 +542,9 @@ export default function AdminSamples() {
                               </p>
                             )}
                             {request.status === "requested" && request.shopify_order_claimed_at && (
-                              <p className="text-xs text-destructive">Order attempt didn't finish</p>
+                              <p className="text-xs text-destructive">
+                                {isStaleClaim(request.shopify_order_claimed_at) ? "Order attempt didn't finish" : "Ordering…"}
+                              </p>
                             )}
                           </div>
                         </div>

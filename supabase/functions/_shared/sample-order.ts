@@ -8,6 +8,19 @@
 
 export const SAMPLE_ORDER_MAX_ITEMS = 4;
 
+/**
+ * An order claim older than this belongs to a call that died (edge functions stop well before
+ * it), so an admin may take it over. Anything younger is a call that may still be running.
+ */
+export const STALE_CLAIM_MS = 5 * 60 * 1000;
+
+export const isStaleClaim = (claimedAt: string | null | undefined, now = Date.now()) =>
+  !!claimedAt && now - new Date(claimedAt).getTime() > STALE_CLAIM_MS;
+
+/** Whether a Shopify draft is the one this function made for this request (tag + id in the note). */
+export const isOwnDraft = (draft: { note?: string | null; tags?: string | null }, requestId: string) =>
+  (draft.tags ?? "").split(",").map((t) => t.trim()).includes("creator-sample") && (draft.note ?? "").includes(requestId);
+
 export interface SampleItem {
   id?: string;
   position: number;

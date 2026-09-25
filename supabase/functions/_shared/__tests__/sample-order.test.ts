@@ -11,6 +11,9 @@ import {
   sizeLabel,
   buildSampleDraftOrder,
   approvalMessage,
+  isStaleClaim,
+  isOwnDraft,
+  STALE_CLAIM_MS,
   type BoxItem,
   type SampleItem,
 } from "../sample-order";
@@ -157,5 +160,32 @@ describe("approvalMessage", () => {
   it("keeps the old one-line wording for a single item", () => {
     expect(approvalMessage([item(0)])).toMatch(/^Your request for "Daydream Hoodie — Pink \(M\)" has been approved\./);
     expect(activeItems([item(0)])).toHaveLength(1);
+  });
+});
+
+describe("claims and drafts", () => {
+  const now = Date.parse("2026-09-25T12:00:00Z");
+
+  it("only a claim older than the cutoff is stale", () => {
+    expect(isStaleClaim(null, now)).toBe(false);
+    expect(isStaleClaim(new Date(now - 30_000).toISOString(), now)).toBe(false);
+    expect(isStaleClaim(new Date(now - STALE_CLAIM_MS - 1000).toISOString(), now)).toBe(true);
+  });
+
+  it("a draft counts as ours only with the sample tag and this request's id", () => {
+    const note = "Creator sample for Leanne (request 5c1e2d3f-aaaa).\n- Hoodie (M)";
+    expect(isOwnDraft({ tags: "creator-sample, promo20", note }, "5c1e2d3f-aaaa")).toBe(true);
+    expect(isOwnDraft({ tags: "promo20", note }, "5c1e2d3f-aaaa")).toBe(false);
+    expect(isOwnDraft({ tags: "creator-sample", note }, "other-request")).toBe(false);
+    expect(isOwnDraft({ tags: null, note: null }, "5c1e2d3f-aaaa")).toBe(false);
+  });
+
+  it("the drafts we build are recognised as ours", () => {
+    const { draft_order } = buildSampleDraftOrder(
+      { id: "req-9", shipping_address: "1 Main", shipping_city: null, shipping_state: null, shipping_zip: null, shipping_country: "US" },
+      null,
+      [item(0)],
+    );
+    expect(isOwnDraft(draft_order, "req-9")).toBe(true);
   });
 });

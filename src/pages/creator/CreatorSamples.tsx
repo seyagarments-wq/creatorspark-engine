@@ -308,7 +308,7 @@ export default function CreatorSamples() {
                   </div>
                   
                   <CollapsibleContent className="mt-4 pt-4 border-t space-y-5">
-                    <ItemList items={request.items} />
+                    <ItemList items={request.items} showDrops={request.status !== "rejected"} />
                     <ShippingTimeline
                       status={request.status}
                       createdAt={request.created_at}
@@ -369,12 +369,12 @@ function ItemThumbs({ items }: { items: SampleItem[] }) {
 }
 
 /** Every item in the order; ones an admin dropped are struck through with the reason. */
-function ItemList({ items }: { items: SampleItem[] }) {
+function ItemList({ items, showDrops }: { items: SampleItem[]; showDrops: boolean }) {
   if (items.length === 0) return null;
   return (
     <ul className="space-y-2">
       {items.map((i) => {
-        const dropped = !!i.removed_at;
+        const dropped = showDrops && !!i.removed_at;
         const size = sizeLabel(i.variant_title);
         return (
           <li key={i.shopify_product_id} className="flex items-center gap-3">

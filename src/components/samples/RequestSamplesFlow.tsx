@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Package, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -61,14 +61,22 @@ export function RequestSamplesFlow({ open, onOpenChange, brands, lastShipping, o
   const [ship, setShip] = useState<ShippingDetails>(EMPTY_SHIPPING);
   const [submitting, setSubmitting] = useState(false);
 
-  // Fresh flow each time it opens: empty box, address from the last request.
+  // Fresh flow each time it opens (empty box, address from the last request), and only then:
+  // a parent re-render while the sheet is open must not wipe the box.
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (!open) return;
-    setStep("pick");
-    setBox([]);
-    setShip(lastShipping ?? EMPTY_SHIPPING);
-    setBrandId((current) => current || brands[0]?.id || "");
-  }, [open, lastShipping, brands]);
+    if (open && !wasOpen.current) {
+      setStep("pick");
+      setBox([]);
+      setShip(lastShipping ?? EMPTY_SHIPPING);
+    }
+    wasOpen.current = open;
+  }, [open, lastShipping]);
+
+  // Brands can arrive after the sheet is first rendered; default to the first one.
+  useEffect(() => {
+    if (!brandId && brands[0]) setBrandId(brands[0].id);
+  }, [brands, brandId]);
 
   const labels = COUNTRIES[ship.country] ?? COUNTRIES.US;
   const set = (k: keyof ShippingDetails) => (e: React.ChangeEvent<HTMLInputElement>) => setShip((s) => ({ ...s, [k]: e.target.value }));

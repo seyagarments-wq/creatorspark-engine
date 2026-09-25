@@ -33,9 +33,9 @@ export function useShopifyProducts() {
   });
 }
 
-/** Variant id → variant, for stock lookups. */
-export function variantIndex(products: ShopifyProduct[] | undefined): Map<string, ShopifyVariant> {
-  const map = new Map<string, ShopifyVariant>();
-  for (const p of products ?? []) for (const v of p.variants) map.set(v.id, v);
+/** Variant id → the variant and its product, for stock and name checks. */
+export function variantIndex(products: ShopifyProduct[] | undefined): Map<string, ShopifyVariant & { product: ShopifyProduct }> {
+  const map = new Map<string, ShopifyVariant & { product: ShopifyProduct }>();
+  for (const p of products ?? []) for (const v of p.variants) map.set(v.id, { ...v, product: p });
   return map;
 }
