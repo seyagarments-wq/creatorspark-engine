@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { shopifyFetch } from "../_shared/shopify.ts";
 import { HttpError } from "../_shared/payout-guard.ts";
 import { requirePayoutCaller } from "../_shared/payout-auth.ts";
