@@ -185,30 +185,7 @@ export function VideoCommentThread({
               });
             }
           }
-
-          // Also notify admins
-          const { data: adminRoles } = await supabase
-            .from("user_roles")
-            .select("user_id")
-            .eq("role", "admin");
-
-          const { data: video } = await supabase
-            .from("videos")
-            .select("title")
-            .eq("id", videoId)
-            .single();
-
-          for (const admin of adminRoles || []) {
-            await supabase.functions.invoke("send-notification-email", {
-              body: {
-                user_id: admin.user_id,
-                title: "Creator replied to feedback",
-                message: `A creator replied on "${video?.title || "a video"}"`,
-                notification_type: "video",
-                link: "/admin/submissions",
-              },
-            });
-          }
+          // Admins are no longer emailed on creator replies (2026-10-20); the thread is in the queue.
         }
       } catch {
         // Notification failures shouldn't block

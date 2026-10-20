@@ -3435,6 +3435,7 @@ export type Database = {
           meta_video_id: string | null
           rejection_reason: string | null
           rejection_reason_code: string | null
+          reviewed_at: string | null
           similarity_flag: boolean
           similarity_reason: string | null
           status: Database["public"]["Enums"]["video_status"]
@@ -3476,6 +3477,7 @@ export type Database = {
           meta_video_id?: string | null
           rejection_reason?: string | null
           rejection_reason_code?: string | null
+          reviewed_at?: string | null
           similarity_flag?: boolean
           similarity_reason?: string | null
           status?: Database["public"]["Enums"]["video_status"]
@@ -3517,6 +3519,7 @@ export type Database = {
           meta_video_id?: string | null
           rejection_reason?: string | null
           rejection_reason_code?: string | null
+          reviewed_at?: string | null
           similarity_flag?: boolean
           similarity_reason?: string | null
           status?: Database["public"]["Enums"]["video_status"]

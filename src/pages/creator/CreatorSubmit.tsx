@@ -600,48 +600,8 @@ export default function CreatorSubmit() {
         description: "Your videos are now pending review",
       });
 
-      // Send push notifications
+      // No per-upload email. Review decisions reach the creator in the daily digest.
       try {
-        // Notify creator
-        if (user) {
-          await supabase.functions.invoke("send-notification-email", {
-            body: {
-              user_id: user.id,
-              title: "Video Submitted!",
-              message: `Your ${successCount > 1 ? `${successCount} videos have` : "video has"} been submitted for review.`,
-              notification_type: "video",
-              link: "/creator/my-videos",
-            },
-          });
-        }
-
-        // Notify admins
-        const { data: admins } = await supabase
-          .from("user_roles")
-          .select("user_id")
-          .eq("role", "admin");
-
-        // Get creator profile for peer notification
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("full_name")
-          .eq("id", profileId)
-          .single();
-
-        if (admins?.length) {
-          for (const admin of admins) {
-            await supabase.functions.invoke("send-notification-email", {
-              body: {
-                user_id: admin.user_id,
-                title: "New Video Submission",
-                message: `${profile?.full_name || "A creator"} submitted ${successCount} video${successCount > 1 ? "s" : ""} for review.`,
-                notification_type: "video",
-                link: "/admin/submissions",
-              },
-            });
-          }
-        }
-
         // Notify mentor(s) about new upload (fire-and-forget)
         if (profileId) {
           supabase.functions.invoke("notify-mentor-new-upload", {
