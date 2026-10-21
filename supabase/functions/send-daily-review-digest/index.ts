@@ -38,10 +38,6 @@ function cleanReason(r: string | null): string {
   return r.replace(/\[sticker:[^\]]*\]/g, "").replace(/\s+/g, " ").trim();
 }
 
-function money(n: number): string {
-  return Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`;
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -102,10 +98,6 @@ serve(async (req) => {
       return json({ sent: 0, approvals: 0, declined: others.length, window: { since, until } });
     }
 
-    // Pay rate (bounty videos are paid through the bounty, not per video)
-    const { data: rates } = await supabase.from("settings").select("value").eq("key", "pay_rates").maybeSingle();
-    const perVideo = Number((rates?.value as { per_video?: number } | null)?.per_video ?? 65);
-
     // Creators involved
     const creatorIds = [...new Set([...approvals, ...others].map((v) => v.creator_id))];
     const { data: profiles } = await supabase.from("profiles").select("id, user_id, full_name").in("id", creatorIds);
@@ -134,7 +126,6 @@ serve(async (req) => {
       if (!profile?.user_id) { log("creator without user", { creatorId }); continue; }
 
       const n = vids.length;
-      const paid = vids.filter((v) => !v.bounty_id).length * perVideo;
       const mine = others.filter((v) => v.creator_id === creatorId);
       const rejected = mine.filter((v) => v.status === "rejected");
       const revisions = mine.filter((v) => v.status === "revision_requested");
@@ -142,7 +133,6 @@ serve(async (req) => {
       const lines: string[] = [];
       lines.push(n === 1 ? `1 of your videos was approved today:` : `${n} of your videos were approved today:`);
       for (const v of vids) lines.push(`• "${cleanTitle(v.title)}"`);
-      if (paid > 0) lines.push(`${money(paid)} is on your balance. It pays out with your cycle.`);
       if (rejected.length) {
         lines.push(`Not approved today:`);
         for (const v of rejected) {
