@@ -126,23 +126,15 @@ serve(async (req) => {
       if (!profile?.user_id) { log("creator without user", { creatorId }); continue; }
 
       const n = vids.length;
+      // Rejected and revision_requested both read as "declined" to the creator; the notes say which.
       const mine = others.filter((v) => v.creator_id === creatorId);
-      const rejected = mine.filter((v) => v.status === "rejected");
-      const revisions = mine.filter((v) => v.status === "revision_requested");
 
       const lines: string[] = [];
       lines.push(n === 1 ? `1 of your videos was approved today:` : `${n} of your videos were approved today:`);
       for (const v of vids) lines.push(`• "${cleanTitle(v.title)}"`);
-      if (rejected.length) {
-        lines.push(`Not approved today:`);
-        for (const v of rejected) {
-          const why = cleanReason(v.rejection_reason);
-          lines.push(`• "${cleanTitle(v.title)}"${why ? `: ${why}` : ""}`);
-        }
-      }
-      if (revisions.length) {
-        lines.push(`Sent back for a fix:`);
-        for (const v of revisions) {
+      if (mine.length) {
+        lines.push(`Declined today:`);
+        for (const v of mine) {
           const why = cleanReason(v.rejection_reason);
           lines.push(`• "${cleanTitle(v.title)}"${why ? `: ${why}` : ""}`);
         }
@@ -162,14 +154,7 @@ serve(async (req) => {
       const name = byId.get(creatorId)?.full_name || "Unknown creator";
       adminLines.push(`${name} (${vids.length}): ${vids.map((v) => `"${cleanTitle(v.title)}"`).join(", ")}`);
     }
-    const rejectedCount = others.filter((v) => v.status === "rejected").length;
-    const revisionCount = others.filter((v) => v.status === "revision_requested").length;
-    if (rejectedCount || revisionCount) {
-      const parts: string[] = [];
-      if (rejectedCount) parts.push(`${rejectedCount} not approved`);
-      if (revisionCount) parts.push(`${revisionCount} sent back`);
-      adminLines.push(`Also today: ${parts.join(", ")}.`);
-    }
+    if (others.length) adminLines.push(`Also today: ${others.length} declined.`);
     const adminSubject = `Approved today: ${approvals.length} video${approvals.length === 1 ? "" : "s"} from ${creatorsWithApprovals} creator${creatorsWithApprovals === 1 ? "" : "s"}`;
     const adminMessage = adminLines.join("\n");
     for (const a of adminRoles || []) {
