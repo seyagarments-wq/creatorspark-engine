@@ -143,3 +143,6 @@ verify_jwt = false
 
 [functions.accept-invite]
 verify_jwt = false
+
+[functions.send-daily-review-digest]
+verify_jwt = false

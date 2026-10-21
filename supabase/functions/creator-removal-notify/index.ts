@@ -98,125 +98,12 @@ serve(async (req) => {
       }
     }
 
-    // 2. Find the creator's profile ID and cohort
-    let profileId = body.creator_profile_id;
-    if (!profileId && creator_user_id) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("user_id", creator_user_id)
-        .single();
-      profileId = profile?.id;
-    }
-
-    // 3. Get cohort-scoped creators
-    let cohortCreatorUserIds: string[] = [];
-    let cohortNames: string[] = [];
-
-    if (profileId) {
-      const { data: creatorCohorts } = await supabase
-        .from("creator_cohort_members")
-        .select("cohort_id, creator_cohorts(name)")
-        .eq("creator_id", profileId);
-
-      if (creatorCohorts?.length) {
-        const cohortIds = creatorCohorts.map(c => c.cohort_id);
-        cohortNames = creatorCohorts.map((c: any) => c.creator_cohorts?.name).filter(Boolean);
-
-        const { data: cohortMembers } = await supabase
-          .from("creator_cohort_members")
-          .select("creator_id, profiles!inner(user_id)")
-          .in("cohort_id", cohortIds);
-
-        cohortCreatorUserIds = (cohortMembers || [])
-          .map((m: any) => m.profiles.user_id)
-          .filter((uid: string) => uid !== creator_user_id);
-      }
-    }
-
-    // If no cohort found, only admins will receive the broadcast (no platform-wide fallback)
-    if (!cohortCreatorUserIds.length) {
-      logStep("No cohort found for creator, broadcast will only go to admins");
-    }
-
-    // 4. Always include admins
-    const { data: adminRoles } = await supabase
-      .from("user_roles")
-      .select("user_id")
-      .eq("role", "admin");
-    const adminUserIds = (adminRoles || []).map(r => r.user_id);
-
-    const activeUserIds = [...new Set([...cohortCreatorUserIds, ...adminUserIds])];
-
-    // 5. Get recipient names for personalized emails
-    const { data: recipientProfiles } = await supabase
-      .from("profiles")
-      .select("user_id, full_name")
-      .in("user_id", activeUserIds);
-    const nameMap = new Map((recipientProfiles || []).map(p => [p.user_id, p.full_name]));
-
-    logStep("Broadcasting to cohort + admins", {
-      cohortCreators: cohortCreatorUserIds.length,
-      admins: adminUserIds.length,
-      total: activeUserIds.length,
-      cohorts: cohortNames,
-    });
-
-    let sent = 0;
-    const errors: string[] = [];
-
-    for (const userId of activeUserIds) {
-      try {
-        const recipientName = nameMap.get(userId) || "there";
-        let broadcastTitle: string;
-        let broadcastMessage: string;
-        let broadcastButton: string;
-
-        if (action === "removed") {
-          broadcastTitle = `[Important] Cohort update: a creator has been removed`;
-          broadcastMessage = `Hello ${recipientName},\n\n${creator_name} has been removed from the platform. Reason: ${actualReason}.\n\nWe are sharing this with the cohort as a reminder that consistent uploads are required to remain active. Please review your own upload schedule and ensure you are on track for this month.`;
-          broadcastButton = "Review my uploads";
-        } else {
-          broadcastTitle = `[Important] Cohort update: a creator is at risk of removal`;
-          broadcastMessage = `Hello ${recipientName},\n\n${creator_name} has been placed at risk of removal from the platform. Reason: ${actualReason}.\n\nIf you are in close contact with ${creator_name}, please encourage them to return to a regular upload schedule. Also take a moment to confirm that your own uploads are on track.`;
-          broadcastButton = "Review my uploads";
-        }
-
-        const response = await fetch(`${supabaseUrl}/functions/v1/send-notification-email`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseServiceKey}` },
-          body: JSON.stringify({
-            user_id: userId,
-            title: broadcastTitle,
-            message: broadcastMessage,
-            notification_type: "general",
-            link: "/creator/submit",
-            button_text: broadcastButton,
-            from_name: "Creators Control",
-          }),
-        });
-
-        if (response.ok) {
-          sent++;
-        } else {
-          errors.push(`${userId}: ${await response.text()}`);
-        }
-
-        await new Promise((r) => setTimeout(r, 300));
-      } catch (err) {
-        errors.push(`${userId}: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    }
-
-    logStep("Broadcast complete", { sent, errors: errors.length });
-
+    // The cohort/admin broadcast that used to follow was cut 2026-10-20: cohorts are empty, so
+    // it only ever emailed the admins about a removal they had just done themselves.
     return new Response(JSON.stringify({
       success: true,
       personal_email_sent: !!creator_user_id,
-      broadcast_sent: sent,
-      broadcast_total: activeUserIds.length,
-      cohorts: cohortNames.length > 0 ? cohortNames : undefined,
-      errors: errors.length > 0 ? errors : undefined,
+      broadcast_sent: 0,
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,

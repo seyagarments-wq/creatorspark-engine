@@ -506,6 +506,7 @@ export default function AdminSubmissions() {
         admin_feedback: feedback || null,
         admin_feedback_stickers: stickers.length > 0 ? stickers : null,
         approved_at: new Date().toISOString(),
+        reviewed_at: new Date().toISOString(),
       } as any)
       .eq("id", video.id)
       .then(({ error }) => {
@@ -517,34 +518,11 @@ export default function AdminSubmissions() {
           return;
         }
 
-        // Fire-and-forget notifications
-        const feedbackText = feedback 
-          ? `\n\nNote from your reviewer: "${feedback}"`
-          : "";
-        supabase.functions.invoke("send-notification-email", {
-          body: {
-            user_id: video.creator?.user_id,
-            title: "Video approved",
-            message: `Your video "${video.title}" has been approved and is now in use. It counts toward your pay.${feedbackText}`,
-            notification_type: "video",
-            link: "/creator/my-videos",
-            button_text: "View your video",
-          },
-        }).catch(e => console.error("Failed to send notification:", e));
-
+        // Creator + admins hear about this in the daily review digest, not per approval.
         supabase.functions.invoke("notify-mentor-video-status", {
           body: { video_id: video.id, new_status: "approved" },
         }).catch(e => console.error("Failed to notify mentor:", e));
 
-        if (video.creator?.user_id) {
-          supabase.functions.invoke("broadcast-peer-notification", {
-            body: {
-              event_type: "video_approved",
-              actor_name: video.creator?.full_name || "A creator",
-              actor_user_id: video.creator.user_id,
-            },
-          }).catch(e => console.error("Failed to broadcast peer notification:", e));
-        }
       });
   }
 
@@ -571,7 +549,7 @@ export default function AdminSubmissions() {
 
     supabase
       .from("videos")
-      .update({ status: "rejected", rejection_reason: combinedReason })
+      .update({ status: "rejected", rejection_reason: combinedReason, reviewed_at: new Date().toISOString() })
       .eq("id", video.id)
       .then(({ error }) => {
         if (error) {
@@ -581,19 +559,7 @@ export default function AdminSubmissions() {
           return;
         }
 
-        supabase.functions.invoke("send-notification-email", {
-          body: {
-            user_id: video.creator?.user_id,
-            title: "[Important] Video not approved",
-            message: fullReason
-              ? `Your video "${video.title}" was not approved.\n\nReason:\n${fullReason}\n\nReview the notes carefully and apply them to your next submission. Rejections are final, so use this feedback to make sure your next upload meets the standard.`
-              : `Your video "${video.title}" was not approved.\n\nReview your dashboard for details and apply the feedback to your next upload. Rejections are final, so use this as direction for what to improve.`,
-            notification_type: "video",
-            link: "/creator/my-videos",
-            button_text: "View details",
-          },
-        }).catch(e => console.error("Failed to send notification:", e));
-
+        // Creator hears about this in the daily review digest.
         supabase.functions.invoke("notify-mentor-video-status", {
           body: { video_id: video.id, new_status: "rejected", rejection_reason: fullReason || null },
         }).catch(e => console.error("Failed to notify mentor:", e));
@@ -626,6 +592,7 @@ export default function AdminSubmissions() {
       .update({ 
         status: "revision_requested" as any, 
         rejection_reason: combinedReason,
+        reviewed_at: new Date().toISOString(),
       })
       .eq("id", video.id)
       .then(({ error }) => {
@@ -636,19 +603,7 @@ export default function AdminSubmissions() {
           return;
         }
 
-        supabase.functions.invoke("send-notification-email", {
-          body: {
-            user_id: video.creator?.user_id,
-            title: "Revision needed on your video 🔄",
-            message: fullNotes
-              ? `Your video "${video.title}" needs a small tweak before it goes live.\n\nHere's what to fix:\n\n${fullNotes}\n\nHit up your mentor if you need help — they've got your back. Fix it, resubmit, and let's get this one live. 💪`
-              : `Your video "${video.title}" needs a quick fix before it goes live.\n\nCheck your dashboard for details and reach out to your mentor if you're unsure what to change. Fix it up and resubmit — you're close. 💪`,
-            notification_type: "video",
-            link: "/creator/my-videos",
-            button_text: "Revise Your Video",
-          },
-        }).catch(e => console.error("Failed to send notification:", e));
-
+        // Creator hears about this in the daily review digest.
         // Notify assigned mentor(s) about revision
         supabase.functions.invoke("notify-mentor-video-status", {
           body: { video_id: video.id, new_status: "revision_requested", rejection_reason: combinedReason },
@@ -848,56 +803,12 @@ export default function AdminSubmissions() {
     try {
       const { error } = await supabase
         .from("videos")
-        .update({ status: "approved", rejection_reason: null, approved_at: new Date().toISOString() } as any)
+        .update({ status: "approved", rejection_reason: null, approved_at: new Date().toISOString(), reviewed_at: new Date().toISOString() } as any)
         .in("id", Array.from(selectedIds));
 
       if (error) throw error;
 
-      // Send notifications to all creators whose videos were approved
-      const approvedVideos = submissions.filter(s => selectedIds.has(s.id));
-      const uniqueCreators = new Map<string, { userId: string; creatorName: string; videoTitles: string[] }>();
-      
-      approvedVideos.forEach(video => {
-        if (video.creator?.user_id) {
-          const existing = uniqueCreators.get(video.creator.user_id);
-          if (existing) {
-            existing.videoTitles.push(video.title);
-          } else {
-            uniqueCreators.set(video.creator.user_id, { 
-              userId: video.creator.user_id, 
-              creatorName: video.creator?.full_name || "A creator",
-              videoTitles: [video.title] 
-            });
-          }
-        }
-      });
-
-      // Fire-and-forget: send notifications in background
-      for (const [_, creatorInfo] of uniqueCreators) {
-        const count = creatorInfo.videoTitles.length;
-        supabase.functions.invoke("send-notification-email", {
-          body: {
-            user_id: creatorInfo.userId,
-            title: count > 1 ? `${count} videos approved` : "Video approved",
-            message: count > 1 
-              ? `${count} of your videos have been approved and are now in use. They count toward your pay.`
-              : `Your video "${creatorInfo.videoTitles[0]}" has been approved and is now in use. It counts toward your pay.`,
-            notification_type: "video",
-            link: "/creator/my-videos",
-            button_text: "View your videos",
-          },
-        }).catch(e => console.error("Failed to send notification:", e));
-
-        // Broadcast peer notification for each approved creator (use real name, not generic)
-        supabase.functions.invoke("broadcast-peer-notification", {
-          body: {
-            event_type: "video_approved",
-            actor_name: creatorInfo.creatorName,
-            actor_user_id: creatorInfo.userId,
-            details: { video_count: count },
-          },
-        }).catch(e => console.error("Failed to broadcast peer notification:", e));
-      }
+      // Creators + admins hear about this in the daily review digest.
 
       toast({
         title: "Videos Approved",
@@ -924,46 +835,12 @@ export default function AdminSubmissions() {
     try {
       const { error } = await supabase
         .from("videos")
-        .update({ status: "rejected", rejection_reason: reason })
+        .update({ status: "rejected", rejection_reason: reason, reviewed_at: new Date().toISOString() })
         .in("id", Array.from(selectedIds));
 
       if (error) throw error;
 
-      // Send notifications to all creators whose videos were rejected
-      const rejectedVideos = submissions.filter(s => selectedIds.has(s.id));
-      const uniqueCreators = new Map<string, { userId: string; videoTitles: string[] }>();
-      
-      rejectedVideos.forEach(video => {
-        if (video.creator?.user_id) {
-          const existing = uniqueCreators.get(video.creator.user_id);
-          if (existing) {
-            existing.videoTitles.push(video.title);
-          } else {
-            uniqueCreators.set(video.creator.user_id, { 
-              userId: video.creator.user_id, 
-              videoTitles: [video.title] 
-            });
-          }
-        }
-      });
-
-      // Fire-and-forget: send notifications in background
-      for (const [_, creatorInfo] of uniqueCreators) {
-        const count = creatorInfo.videoTitles.length;
-        const reasonText = reason ? `\n\n${reason}` : "";
-        supabase.functions.invoke("send-notification-email", {
-          body: {
-            user_id: creatorInfo.userId,
-            title: count > 1 ? `[Important] ${count} videos not approved` : "[Important] Video not approved",
-            message: count > 1 
-              ? `${count} of your videos were not approved.${reasonText}\n\nReview the notes and apply them to your next submissions. Rejections are final, so use this feedback as direction for what to improve.`
-              : `Your video "${creatorInfo.videoTitles[0]}" was not approved.${reasonText}\n\nReview the notes and apply them to your next submission. Rejections are final, so use this feedback as direction for what to improve.`,
-            notification_type: "video",
-            link: "/creator/my-videos",
-            button_text: "View details",
-          },
-        }).catch(e => console.error("Failed to send notification:", e));
-      }
+      // Creators hear about this in the daily review digest.
 
       toast({
         title: "Videos Rejected",
